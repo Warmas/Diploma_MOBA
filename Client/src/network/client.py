@@ -1,6 +1,7 @@
 import socket
 import selectors
 import threading
+import traceback
 
 from Common.src.network.tsdeque import TsDeque
 from Common.src.network.connection import Connection
@@ -13,9 +14,9 @@ class Client:
         self.sel = selectors.DefaultSelector()
         self.sock = None
         self.connection_object = None
-        self.messages_out = TsDeque()
         self.messages_in = TsDeque()
-        self.connection_ready = False
+        self.exc_started = False
+        self.exc_mutex = threading.Lock()
 
         self.process_message_callback = process_message_callback
 
@@ -27,23 +28,32 @@ class Client:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setblocking(False)
         self.sock.connect_ex(server_addr)
-        self.sel.register(self.sock, selectors.EVENT_READ, data=None)
-        self.connection_object = Connection(self.messages_in, self.sel, False)
+        self.sel.register(self.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=None)
+        self.connection_object = Connection(self.messages_in, self.sel, False, self.connection_error)
         event_thread = threading.Thread(target=self.start_event_thread)
         event_thread.start()
-        self.connection_ready = True
 
     def start_event_thread(self):
-        while True:
+        self.connection_object.is_connected = True
+        while self.connection_object.is_connected:
             events = self.sel.select(timeout=None)
             for key, mask in events:
-                try:
-                    self.connection_object.read_message(key, mask)
-                except Exception:
-                    print("Closing connection due to error, for address: ", key.fileobj, "\nInfo: connection lost")
-                    self.sel.unregister(key.fileobj)
-                    key.fileobj.close()
-                    # print('Error: exception for', f'{message.addr}:\n{traceback.format_exc()}')
+                sock = key.fileobj
+                if mask & selectors.EVENT_READ:
+                    self.connection_object.read_message(sock)
+
+    def connection_error(self, sock, msg):
+        self.exc_mutex.acquire()
+        if not self.exc_started:
+            self.exc_started = True
+            self.exc_mutex.release()
+            self.connection_object.is_connected = False
+            self.sel.unregister(sock)
+            sock.close()
+            print("Closing connection due to error!", "\nInfo: ", msg)
+            # print(traceback.format_exc())
+        else:
+            self.exc_mutex.release()
 
     def process_all_messages(self):
         if not self.messages_in.empty():
@@ -53,7 +63,16 @@ class Client:
             self.process_all_messages()
 
     def send_message(self, message_id, message_data):
-        self.connection_object.send_message(self.sock, message_id, message_data)
+        if self.connection_object.is_connected:
+            self.connection_object.send_message(self.sock, message_id, message_data)
+        else:
+            print("Connection is closed, message send failed!")
 
     def send_bytes(self, message_id, message_data):
-        self.connection_object.send_bytes(self.sock, message_id, message_data)
+        if self.connection_object.is_connected:
+            self.connection_object.send_bytes(self.sock, message_id, message_data)
+        else:
+            print("Connection is closed, message send failed!")
+
+    def get_connection_state(self):
+        return self.connection_object.is_connected

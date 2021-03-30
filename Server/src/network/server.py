@@ -1,12 +1,10 @@
 import socket
 import selectors
 import threading
+import traceback
 
 from Common.src.network.tsdeque import TsDeque
 from Common.src.network.connection import Connection
-
-# https://realpython.com/python-sockets/
-# Events
 
 
 class Server:
@@ -31,24 +29,28 @@ class Server:
         conn_sock.listen()
         conn_sock.setblocking(False)
         self.sel.register(conn_sock, selectors.EVENT_READ, data=None)
-        self.connection_object = Connection(self.messages_in, self.sel, True)
+        self.connection_object = Connection(self.messages_in, self.sel, True, self.remove_client)
         event_thread = threading.Thread(target=self.start_event_thread)
         event_thread.start()
         print("Server started at: " + str(self.port) + " : " + self.address)
 
     def start_event_thread(self):
-        while True:
+        self.connection_object.is_connected = True
+        should_stop = False
+        while not should_stop:
             events = self.sel.select(timeout=None)
             for key, mask in events:
+                sock = key.fileobj
                 # New connection
                 if key.data is None:
-                    self.accept_connection(key.fileobj)
+                    self.accept_connection(sock)
                 # Message from connected
                 else:
                     try:
-                        self.connection_object.read_message(key, mask)
+                        if mask & selectors.EVENT_READ:
+                            self.connection_object.read_message(sock)
                     except Exception:
-                        self.remove_client(key.fileobj)
+                        should_stop = self.remove_client(sock, "Connection lost.")
 
     def accept_connection(self, sock):
         conn, addr = sock.accept()
@@ -57,13 +59,17 @@ class Server:
         conn.setblocking(False)
         self.sel.register(conn, selectors.EVENT_READ | selectors.EVENT_WRITE, data="msg")
 
-    def remove_client(self, sock):
-        print("Closing connection due to error, for address: ", sock.getpeername(), "\nInfo: connection lost")
+    def remove_client(self, sock, msg):
+        print("Closing connection due to error, for address: ", sock.getpeername(), "\nInfo: ", msg)
         self.connection_lost_callback(sock)
         self.connection_list.remove(sock)
         self.sel.unregister(sock)
         sock.close()
-        # print('Error: exception for', f'{message.addr}:\n{traceback.format_exc()}')
+        #print(traceback.format_exc())
+        if not len(self.sel.get_map()):
+            return True
+        else:
+            return False
 
     def process_all_messages(self):
         if not self.messages_in.empty():
@@ -91,3 +97,6 @@ class Server:
 
     def send_bytes(self, sock, message_id, message_data):
         self.connection_object.send_bytes(sock, message_id, message_data)
+
+    def get_connections_n(self):
+        return len(self.connection_list)

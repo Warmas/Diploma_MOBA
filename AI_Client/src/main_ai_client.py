@@ -1,4 +1,5 @@
 import time
+import struct
 from PIL import Image
 
 import torch
@@ -60,6 +61,7 @@ class AiClientMain(ClientMain):
         self.can_continue = False
 
     def pause_loop(self):
+        self.is_paused = True
         self.net_client.send_message(MessageTypes.PauseGame.value, "1")
         started_transfer = False
         while not self.can_continue:
@@ -68,6 +70,7 @@ class AiClientMain(ClientMain):
                 if not started_transfer:
                     started_transfer = True
                     self.do_transfer()
+                    print("Finished transfer")
 
     def do_transfer(self):
         for i in range(len(self.agent_trainer.memory.transitions)):
@@ -77,13 +80,11 @@ class AiClientMain(ClientMain):
                                + ';' + str(self.agent_trainer.memory.transitions[i].action.mouse_y) \
                                + ';' + str(self.agent_trainer.memory.transitions[i].reward)
             self.net_client.send_message(MessageTypes.TransitionData.value, msg_body)
-            msg_body = self.agent_trainer.memory.transitions[i].state.image
-            self.net_client.send_bytes(MessageTypes.Image.value, msg_body)  # Bytesize exceeds 1500 but could be fine with TCP? Yet it has socket issuee
-
-    def image_process(self, msg_body):
-        tran_n = msg_body[0]
-        image = np.frombuffer(msg_body[1:], dtype=np.uint8)
-        self.agent_trainer.remote_memory.transitions[tran_n].state.image = image
+            msg_body = struct.pack("!i", i)
+            msg_body += self.agent_trainer.memory.transitions[i].state.image
+            self.net_client.send_bytes(MessageTypes.Image.value, msg_body)
+        self.net_client.send_message(MessageTypes.TransferDone.value, "1")
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
 
     def transition_data_process(self, msg_body):
         msg_data = msg_body.split(';')
@@ -96,6 +97,12 @@ class AiClientMain(ClientMain):
         tran = Transition(State(None), tran_act, tran_rew, None)
         self.agent_trainer.remote_memory.push(tran)
 
+    def image_process(self, msg_body):
+        tran_n = struct.unpack("!i", msg_body[:4])[0]
+        image = np.frombuffer(msg_body[4:], dtype=np.uint8)
+        self.agent_trainer.remote_memory.transitions[tran_n].state.image = image
+        print("Image processed: ", tran_n)
+
     def transfer_done_callback(self):
         self.agent_trainer.optimize_models()
         self.cur_episode_n += 1
@@ -105,7 +112,11 @@ class AiClientMain(ClientMain):
         else:
             self.agent.save_brain_weights()
             self.renderer.stop()
-        self.net_client.send_message(MessageTypes.ContinueGame.value, "1")
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
+
+    def map_reset_callback(self):
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
+
 
     def game_loop(self):
         cur_frame = time.time()

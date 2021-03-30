@@ -15,11 +15,12 @@ import Common.src.globals as g
 
 class ServerMain:
     def __init__(self):
+        self.MOB_COUNT = 12
+        self.OBSTACLE_COUNT = 4
+
         self.net_server = net.Server(self.process_message, self.connection_lost)
         self.player_list = []
-        self.mob_count = 12
         self.mob_list = []
-        self.obstacle_count = 4
         self.obstacle_list = []
         self.heal_place_list = []
         self.projectile_list = []
@@ -34,24 +35,7 @@ class ServerMain:
 
     def start(self):
         self.net_server.start()
-        for i in range(self.mob_count):
-            mob = Mob(i)
-            x = random.randint(150, 850)
-            y = random.randint(100, 700)
-            mob.change_position(np.array([float(x), float(y)]))
-            self.mob_list.append(mob)
-        for i in range(self.obstacle_count):
-            obstacle = CircleObstacle()
-            x = random.randint(100, 900)
-            y = random.randint(100, 700)
-            obstacle.position = np.array([float(x), float(y)])
-            self.obstacle_list.append(obstacle)
-        heal_place1 = HealPlace(1)
-        heal_place1.position = np.array([500, 700])
-        self.heal_place_list.append(heal_place1)
-        heal_place2 = HealPlace(2)
-        heal_place2.position = np.array([500, 100])
-        self.heal_place_list.append(heal_place2)
+        self.map_reset()
         while self.client_ready_counter < 2:
             self.net_server.process_all_messages()
         self.net_server.message_all(MessageTypes.StartGame.value, "1")
@@ -90,9 +74,13 @@ class ServerMain:
             self.client_ready_counter += 1
 
         # AI training stuff
+        if msg.id == MessageTypes.ResetMap:
+            self.map_reset()
+
         if msg.id == MessageTypes.PauseGame.value:
             if not self.is_paused:
                 self.is_paused = True
+                self.client_ready_counter = 0
                 self.pause_loop()
 
         if msg.id == MessageTypes.Image.value:
@@ -105,7 +93,39 @@ class ServerMain:
             self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransferDone.value, msg.body)
 
     def connection_lost(self, sock):
-        self.player_list.remove(self.get_player_for_socket(sock))
+        player = self.get_player_for_socket(sock)
+        if player in self.player_list:
+            self.player_list.remove(player)
+
+    def map_reset(self):
+        for i in range(len(self.player_list)):
+            pos_x = 50.0 + 900 * (i % 2)
+            pos_y = 400.0
+            self.player_list[i].change_position(np.array([pos_x, pos_y]))
+        self.mob_list.clear()
+        self.obstacle_list.clear()
+        self.heal_place_list.clear()
+        for i in range(self.MOB_COUNT):
+            mob = Mob(i)
+            x = random.randint(150, 850)
+            y = random.randint(100, 700)
+            mob.change_position(np.array([float(x), float(y)]))
+            self.mob_list.append(mob)
+        for i in range(self.OBSTACLE_COUNT):
+            obstacle = CircleObstacle()
+            x = random.randint(100, 900)
+            y = random.randint(100, 700)
+            obstacle.position = np.array([float(x), float(y)])
+            self.obstacle_list.append(obstacle)
+        heal_place1 = HealPlace(1)
+        heal_place1.position = np.array([500, 700])
+        self.heal_place_list.append(heal_place1)
+        heal_place2 = HealPlace(2)
+        heal_place2.position = np.array([500, 100])
+        self.heal_place_list.append(heal_place2)
+
+        self.client_ready_counter = 0
+        #self.net_server.
 
     def client_authentication(self, sock, client_id):
         msg_to_send = ""
@@ -224,8 +244,8 @@ class ServerMain:
 
     def pause_loop(self):
         self.net_server.message_all(MessageTypes.PauseGame.value, "1")
-        cont_game = False
-        while not cont_game:
+        connections_n = self.net_server.get_connections_n()
+        while self.client_ready_counter < connections_n:
             self.net_server.process_all_messages()
 
     def server_loop(self):

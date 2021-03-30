@@ -46,7 +46,7 @@ class ClientMain:
         # self.net_thread = threading.Thread(target=self.net_client.start_connection, args=("127.0.0.1", 54321))
         # self.net_thread.start()
         self.net_client.start_connection("127.0.0.1", 54321)
-        while not self.net_client.connection_ready:
+        while not self.net_client.get_connection_state():
             pass
         self.ping_server()
         self.net_client.send_message(MessageTypes.Authentication.value, self.player_id)
@@ -319,7 +319,6 @@ class ClientMain:
         # AI training stuff
         if msg.id == MessageTypes.PauseGame.value:
             if not self.is_paused:
-                self.is_paused = True
                 self.pause_loop()
 
         if msg.id == MessageTypes.Image.value:

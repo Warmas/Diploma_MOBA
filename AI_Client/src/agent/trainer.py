@@ -1,11 +1,10 @@
 import copy
+import random
 
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as nn_func
-
-from AI_Client.src.agent.agent import *
-from AI_Client.src.agent.critic import *
 
 
 class Transition:
@@ -23,7 +22,7 @@ class TrainingMemory:
         self.is_r_disc = False
 
     def push(self, transition):
-        if len(self.transitions) < self.capacity + 1:
+        if len(self.transitions) < self.capacity:
             self.transitions.append(transition)
             return True
         else:
@@ -55,15 +54,16 @@ class Trainer:
         self.actor_optimizer = optim.Adam(self.agent.brain.parameters(), self.LR_ACTOR)
         self.critic_optimizer = optim.Adam(self.critic.brain.parameters(), self.LR_CRITIC)
 
-        self.memory = TrainingMemory(100)
-        self.remote_memory = TrainingMemory(100)
+        self.memory = TrainingMemory(10) # 200 max talán?
+        self.remote_memory = TrainingMemory(10)
 
     def optimize_models(self):
         mem_len = len(self.memory.transitions)
         for i in range(mem_len - 2, -1, -1):  # Equivalent with memory_transitions[-2::-1] loop
             self.memory.transitions[i].reward += self.memory.transitions[i].reward * self.GAMMA
         self.memory.is_r_disc = True
-        for i in range(len(self.memory.transitions)):  # Batching !!!!!!!!
+
+        for i in range(mem_len):  # Batching !!!!!!!!
             r_disc = self.memory.transitions[i].reward
             cur_state = self.memory.transitions[i].state
             # next_state = State(b'')
