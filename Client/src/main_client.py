@@ -49,27 +49,31 @@ class ClientMain:
         while not self.net_client.get_connection_state():
             pass
         self.ping_server()
-        self.net_client.send_message(MessageTypes.Authentication.value, self.player_id)
+        self.net_client.send_message(MessageTypes.Authentication.value, self.player_id, True)
         while not self.is_auth_comp:
             self.process_incoming_messages()
-        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
         while not self.start_game:
             self.process_incoming_messages()
         self.renderer.start()
+
+    def ping_server(self):
+        self.net_client.send_message(MessageTypes.PingServer.value, str(time.time()), True)
 
     def process_incoming_messages(self):
         self.net_client.process_all_messages()
 
     def process_message(self, msg):
-        if msg.id == MessageTypes.PingServer.value:
-            print("Server ping: ", (time.time() - float(msg.body)))
+        msg_id = msg.get_msg_id()
+        if msg_id == MessageTypes.PingServer.value:
+            print("Server ping: ", (time.time() - float(msg.get_body_as_string())))
 
-        if msg.id == MessageTypes.MessagePrint.value:
-            print("Message from server: ", msg.body)
+        elif msg_id == MessageTypes.MessagePrint.value:
+            print("Message from server: ", msg.get_body_as_string())
 
-        if msg.id == MessageTypes.Authentication.value:
+        elif msg_id == MessageTypes.Authentication.value:
             print("Authentication complete")
-            msg_data = msg.body.split("\n\n")
+            msg_data = msg.get_body_as_string().split("\n\n")
             pos = msg_data[0].split(',')
             x_mp = float(pos[0])
             y_mp = float(pos[1])
@@ -126,10 +130,9 @@ class ClientMain:
                 self.is_first_player = True
             self.is_auth_comp = True
 
-        if msg.id == MessageTypes.NewPlayer.value:
-            print("New player")
-            print(msg.body)
-            pnp = msg.body.split(':')
+        elif msg_id == MessageTypes.NewPlayer.value:
+            print("New player joined!")
+            pnp = msg.get_body_as_string().split(':')
             enemy = Player(pnp[0])
             position = pnp[1].split(',')
             x = float(position[0])
@@ -137,8 +140,8 @@ class ClientMain:
             enemy.change_position(np.array([x, y]))
             self.enemy_list.append(enemy)
 
-        if msg.id == MessageTypes.PlayerMoveTo.value:
-            msg_data = msg.body.split(';')
+        elif msg_id == MessageTypes.PlayerMoveTo.value:
+            msg_data = msg.get_body_as_string().split(';')
             player_id = msg_data[0]
             mt_pos = msg_data[1].split(',')
             p_pos = msg_data[2].split(',')
@@ -158,8 +161,8 @@ class ClientMain:
                         enemy.move_to = np.array([x_mt, y_mt])
                         enemy.new_front(enemy.move_to)
 
-        if msg.id == MessageTypes.MobsMoveTo.value:
-            msg_data = msg.body.split('\n')
+        elif msg_id == MessageTypes.MobsMoveTo.value:
+            msg_data = msg.get_body_as_string().split('\n')
             for mob_data in msg_data[1:]:
                 d = mob_data.split(';')
                 mob_id = d[0]
@@ -175,8 +178,8 @@ class ClientMain:
                         mob.move_to = np.array([x_mt, y_mt])
                         mob.new_front(mob.move_to)
 
-        if msg.id == MessageTypes.CastSpell.value:
-            msg_data = msg.body.split(':')
+        elif msg_id == MessageTypes.CastSpell.value:
+            msg_data = msg.get_body_as_string().split(':')
             player_id = msg_data[0]
             spell_data = msg_data[1].split(';')
             spell_id = int(spell_data[0])
@@ -249,8 +252,8 @@ class ClientMain:
                         if eff_id == mob.mob_id:
                             mob.change_position(new_pos)
 
-        if msg.id == MessageTypes.RemoveGameObject.value:
-            msg_data = msg.body.split(':')
+        elif msg_id == MessageTypes.RemoveGameObject.value:
+            msg_data = msg.get_body_as_string().split(':')
             object_id = int(msg_data[0])
             data_list = msg_data[1].split('\n')
             if object_id == ObjectIds.Projectile.value:
@@ -273,8 +276,8 @@ class ClientMain:
                             self.aoe_list.remove(aoe)
                             break
 
-        if msg.id == MessageTypes.UpdateHealth.value:
-            msg_data = msg.body.split("\n\n")
+        elif msg_id == MessageTypes.UpdateHealth.value:
+            msg_data = msg.get_body_as_string().split("\n\n")
             player_data = msg_data[0].split('\n')
             mob_data = msg_data[1].split('\n')
             for data in player_data[1:]:
@@ -298,36 +301,36 @@ class ClientMain:
                         mob.update_health(mob_hp)
                         break
 
-        if msg.id == MessageTypes.MobsKilled.value:
-            msg_data = msg.body.split('\n')
+        elif msg_id == MessageTypes.MobsKilled.value:
+            msg_data = msg.get_body_as_string().split('\n')
             for data in msg_data[1:]:
                 d = data.split(':')
                 killer_id = d[0]
                 mob_id = d[1]
                 self.mob_kill(killer_id, mob_id)
 
-        if msg.id == MessageTypes.HealPlaceChange.value:
-            h_p_id = msg.body
+        elif msg_id == MessageTypes.HealPlaceChange.value:
+            h_p_id = msg.get_body_as_string()
             for heal_place in self.heal_place_list:
                 if heal_place.id == h_p_id:
                     heal_place.cd_start = time.time()
                     heal_place.available = False
 
-        if msg.id == MessageTypes.StartGame.value:
+        elif msg_id == MessageTypes.StartGame.value:
             self.start_game = True
 
         # AI training stuff
-        if msg.id == MessageTypes.PauseGame.value:
+        elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
                 self.pause_loop()
 
-        if msg.id == MessageTypes.Image.value:
+        elif msg_id == MessageTypes.Image.value:
             self.image_process(msg.body)
 
-        if msg.id == MessageTypes.TransitionData.value:
-            self.transition_data_process(msg.body)
+        elif msg_id == MessageTypes.TransitionData.value:
+            self.transition_data_process(msg.get_body_as_string())
 
-        if msg.id == MessageTypes.TransferDone.value:
+        elif msg_id == MessageTypes.TransferDone.value:
             self.transfer_done_callback()
 
     def pause_loop(self):
@@ -367,7 +370,7 @@ class ClientMain:
             # self.player.move_to = np.array([float(x), float(y)])
             # self.player.new_front(np.array([float(x), float(y)]))
             msg_body = str(x) + ',' + str(y)
-            self.net_client.send_message(MessageTypes.PlayerMoveTo.value, msg_body)
+            self.net_client.send_message(MessageTypes.PlayerMoveTo.value, msg_body, True)
 
     def cast_1(self, x, y):
         cur_time = time.time()
@@ -380,7 +383,7 @@ class ClientMain:
             msg_body += ';' + str(cur_time)
             msg_body += ';' + str(self.player.position[0]) + ',' + str(self.player.position[1])
             msg_body += ';' + str(front[0]) + ',' + str(front[1])
-            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body)
+            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def cast_2(self, x, y):
         cur_time = time.time()
@@ -393,7 +396,7 @@ class ClientMain:
             msg_body = str(SpellTypes.BurningGround.value)
             msg_body += ';' + str(cur_time)
             msg_body += ';' + str(x) + ',' + str(y)
-            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body)
+            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def cast_3(self, x, y):
         cur_time = time.time()
@@ -406,7 +409,7 @@ class ClientMain:
             msg_body = str(SpellTypes.HolyGround.value)
             msg_body += ';' + str(cur_time)
             msg_body += ';' + str(x) + ',' + str(y)
-            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body)
+            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def cast_4(self, x, y):
         cur_time = time.time()
@@ -424,7 +427,7 @@ class ClientMain:
             # msg_body += ';' + str(cur_time)  # no game object no id/cast_time required
             msg_body += ';' + str(self.player.front[0]) + ',' + str(self.player.front[1])
             # Like with projectiles here either this position or the server-side position can be used.
-            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body)
+            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def mob_kill(self, killer_id, mob_id):
         for mob in self.mob_list:
@@ -438,9 +441,6 @@ class ClientMain:
             if enemy.player_id == killer_id:
                 enemy.gain_exp(20)
                 break
-
-    def ping_server(self):
-        self.net_client.send_message(MessageTypes.PingServer.value, str(time.time()))
 
     def game_loop(self):
         cur_frame = time.time()

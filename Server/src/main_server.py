@@ -38,58 +38,59 @@ class ServerMain:
         self.map_reset()
         while self.client_ready_counter < 2:
             self.net_server.process_all_messages()
-        self.net_server.message_all(MessageTypes.StartGame.value, "1")
+        self.net_server.message_all(MessageTypes.StartGame.value, "1", True)
         while True:
             self.server_loop()
 
     def process_message(self, msg):
-        if msg.id == MessageTypes.PingServer.value:
+        msg_id = msg.get_msg_id()
+        if msg_id == MessageTypes.PingServer.value:
             # print(time.time() - float(msg.body))
-            self.net_server.send_message(msg.socket, MessageTypes.PingServer.value, str(msg.body))
+            self.net_server.send_message(msg.socket, MessageTypes.PingServer.value, str(msg.get_body_as_string()), True)
 
-        if msg.id == MessageTypes.MessagePrint.value:
+        elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from client: ", msg.socket.getpeername(), msg.body)
-            self.net_server.send_message(msg.socket, MessageTypes.MessagePrint.value, str(msg.body))
+            self.net_server.send_message(msg.socket, MessageTypes.MessagePrint.value, str(msg.get_body_as_string()), True)
 
-        if msg.id == MessageTypes.Authentication.value:
-            print("Client authenticated: ", msg.socket.getpeername(), " as: ", msg.body)
-            self.client_authentication(msg.socket, msg.body)
+        elif msg_id == MessageTypes.Authentication.value:
+            print("Client authenticated: ", msg.socket.getpeername(), " as: ", msg.get_body_as_string())
+            self.client_authentication(msg.socket, msg.get_body_as_string())
 
-        if msg.id == MessageTypes.PlayerMoveTo.value:
-            pos = msg.body.split(',')
+        elif msg_id == MessageTypes.PlayerMoveTo.value:
+            pos = msg.get_body_as_string().split(',')
             player = self.get_player_for_socket(msg.socket)
             x = float(pos[0])
             y = float(pos[1])
             player.move_to = np.array([x, y])
             player.new_front(np.array([x, y]))
-            msg_body = player.player_id + ';' + msg.body
+            msg_body = player.player_id + ';' + msg.get_body_as_string()
             msg_body += ';' + str(player.position[0]) + ',' + str(player.position[1])
-            # self.net_server.message_all_but_one(msg.socket, MessageTypes.PlayerMoveTo, msg_body)
-            self.net_server.message_all(MessageTypes.PlayerMoveTo.value, msg_body)
+            # self.net_server.message_all_but_one(msg.socket, MessageTypes.PlayerMoveTo, msg_body, True)
+            self.net_server.message_all(MessageTypes.PlayerMoveTo.value, msg_body, True)
 
-        if msg.id == MessageTypes.CastSpell.value:
-            self.cast_spell(msg.socket, msg.body)
+        elif msg_id == MessageTypes.CastSpell.value:
+            self.cast_spell(msg.socket, msg.get_body_as_string())
 
-        if msg.id == MessageTypes.ClientReady.value:
+        elif msg_id == MessageTypes.ClientReady.value:
             self.client_ready_counter += 1
 
         # AI training stuff
-        if msg.id == MessageTypes.ResetMap:
+        elif msg_id == MessageTypes.ResetMap:
             self.map_reset()
 
-        if msg.id == MessageTypes.PauseGame.value:
+        elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
                 self.is_paused = True
                 self.client_ready_counter = 0
                 self.pause_loop()
 
-        if msg.id == MessageTypes.Image.value:
-            self.net_server.send_bytes(self.player_list[0].sock, MessageTypes.Image.value, msg.body)
+        elif msg_id == MessageTypes.Image.value:
+            self.net_server.send_message(self.player_list[0].sock, MessageTypes.Image.value, msg.body)
 
-        if msg.id == MessageTypes.TransitionData.value:
-            self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransitionData.value, msg.body)
+        elif msg_id == MessageTypes.TransitionData.value:
+            self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransitionData.value, msg.get_body_as_string(), True)
 
-        if msg.id == MessageTypes.TransferDone.value:
+        elif msg_id == MessageTypes.TransferDone.value:
             self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransferDone.value, msg.body)
 
     def connection_lost(self, sock):
@@ -156,9 +157,9 @@ class ServerMain:
             msg_to_send += "1"
         else:
             msg_to_send += "0"
-        self.net_server.send_message(sock, MessageTypes.Authentication.value, msg_to_send)
+        self.net_server.send_message(sock, MessageTypes.Authentication.value, msg_to_send, True)
         msg_to_others = new_player.player_id + ':' + position_string
-        self.net_server.message_all_but_one(sock, MessageTypes.NewPlayer.value, msg_to_others)
+        self.net_server.message_all_but_one(sock, MessageTypes.NewPlayer.value, msg_to_others, True)
 
     def get_player_for_socket(self, sock):
         for player in self.player_list:
@@ -189,7 +190,7 @@ class ServerMain:
             fireball.damage = fireball.damage * player.level
             self.projectile_list.append(fireball)
             new_msg_body = str(player.player_id) + ':' + msg_body
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body)
+            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
         if spell_id == SpellTypes.BurningGround.value:
             cast_time = float(spell_data[1])
@@ -201,7 +202,7 @@ class ServerMain:
             burn_ground.health_modifier = burn_ground.health_modifier * player.level
             self.aoe_list.append(burn_ground)
             new_msg_body = str(player.player_id) + ':' + msg_body
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body)
+            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
         if spell_id == SpellTypes.HolyGround.value:
             cast_time = float(spell_data[1])
@@ -213,7 +214,7 @@ class ServerMain:
             holy_ground.health_modifier = holy_ground.health_modifier * player.level
             self.aoe_list.append(holy_ground)
             new_msg_body = str(player.player_id) + ':' + msg_body
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body)
+            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
         if spell_id == SpellTypes.Knockback.value:
             front_data = spell_data[1].split(',')
@@ -240,10 +241,10 @@ class ServerMain:
                     m_to_check.change_position(m_pos)
                     new_msg_body += "\n\n" + str(m_to_check.mob_id) + '\n' \
                                     + str(m_to_check.position[0]) + ',' + str(m_to_check.position[1])
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body)
+            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
     def pause_loop(self):
-        self.net_server.message_all(MessageTypes.PauseGame.value, "1")
+        self.net_server.message_all(MessageTypes.PauseGame.value, "1", True)
         connections_n = self.net_server.get_connections_n()
         while self.client_ready_counter < connections_n:
             self.net_server.process_all_messages()
@@ -303,7 +304,7 @@ class ServerMain:
                     else:
                         self.mob_kill(proj.owner, mob)
                         msg_body = '\n' + proj.owner + ':' + str(mob.mob_id)
-                        self.net_server.message_all(MessageTypes.MobsKilled.value, msg_body)
+                        self.net_server.message_all(MessageTypes.MobsKilled.value, msg_body, True)
                     break
 
             for obs in self.obstacle_list:
@@ -319,7 +320,7 @@ class ServerMain:
             for proj in proj_remove_list:
                 self.projectile_list.remove(proj)
                 msg_body += '\n' + proj.owner + ';' + proj.cast_time
-            self.net_server.message_all(MessageTypes.RemoveGameObject.value, msg_body)
+            self.net_server.message_all(MessageTypes.RemoveGameObject.value, msg_body, True)
 
         aoe_remove_list = []
         for aoe in self.aoe_list:
@@ -356,7 +357,7 @@ class ServerMain:
                             msg_body = ""
                             for mob in mobs_killed:
                                 msg_body += '\n' + aoe.owner + ':' + str(mob.mob_id)
-                            self.net_server.message_all(MessageTypes.MobsKilled.value, msg_body)
+                            self.net_server.message_all(MessageTypes.MobsKilled.value, msg_body, True)
 
         for heal_place in self.heal_place_list:
             for player in self.player_list:
@@ -369,14 +370,14 @@ class ServerMain:
                         if player not in player_hp_update_list:
                             player_hp_update_list.append(player)
                         msg_body = str(heal_place.id)
-                        self.net_server.message_all(MessageTypes.HealPlaceChange.value, msg_body)
+                        self.net_server.message_all(MessageTypes.HealPlaceChange.value, msg_body, True)
 
         if len(aoe_remove_list) > 0:
             msg_body = str(casting.ObjectIds.Aoe.value) + ':'
             for aoe in aoe_remove_list:
                 self.aoe_list.remove(aoe)
                 msg_body += '\n' + aoe.owner + ';' + str(aoe.cast_time)
-                self.net_server.message_all(MessageTypes.RemoveGameObject.value, msg_body)
+                self.net_server.message_all(MessageTypes.RemoveGameObject.value, msg_body, True)
 
         if len(player_hp_update_list) > 0 or len(mob_hp_update_list) > 0:
             msg_body = ""
@@ -385,7 +386,7 @@ class ServerMain:
             msg_body += "\n\n"
             for mob in mob_hp_update_list:
                 msg_body += '\n' + str(mob.mob_id) + ':' + str(mob.health)
-            self.net_server.message_all(MessageTypes.UpdateHealth.value, msg_body)
+            self.net_server.message_all(MessageTypes.UpdateHealth.value, msg_body, True)
 
         for obs in self.obstacle_list:
             for player in self.player_list:
@@ -418,7 +419,7 @@ class ServerMain:
             msg_body += '\n' + str(mob.mob_id) + ';' + str(mob.move_to[0]) + ',' + str(mob.move_to[1])
             msg_body += ';' + str(mob.position[0]) + ',' + str(mob.position[1])
         if len(mob_move_list) > 0:
-            self.net_server.message_all(MessageTypes.MobsMoveTo.value, msg_body)
+            self.net_server.message_all(MessageTypes.MobsMoveTo.value, msg_body, True)
         return players_hit
 
     def mob_kill(self, killer, mob):

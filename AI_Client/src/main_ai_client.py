@@ -62,7 +62,7 @@ class AiClientMain(ClientMain):
 
     def pause_loop(self):
         self.is_paused = True
-        self.net_client.send_message(MessageTypes.PauseGame.value, "1")
+        self.net_client.send_message(MessageTypes.PauseGame.value, "1", True)
         started_transfer = False
         while not self.can_continue:
             self.process_incoming_messages()
@@ -79,12 +79,12 @@ class AiClientMain(ClientMain):
                                + ';' + str(self.agent_trainer.memory.transitions[i].action.mouse_x) \
                                + ';' + str(self.agent_trainer.memory.transitions[i].action.mouse_y) \
                                + ';' + str(self.agent_trainer.memory.transitions[i].reward)
-            self.net_client.send_message(MessageTypes.TransitionData.value, msg_body)
+            self.net_client.send_message(MessageTypes.TransitionData.value, msg_body, True)
             msg_body = struct.pack("!i", i)
             msg_body += self.agent_trainer.memory.transitions[i].state.image
-            self.net_client.send_bytes(MessageTypes.Image.value, msg_body)
-        self.net_client.send_message(MessageTypes.TransferDone.value, "1")
-        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
+            self.net_client.send_message(MessageTypes.Image.value, msg_body)
+        self.net_client.send_message(MessageTypes.TransferDone.value, b'1')
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
 
     def transition_data_process(self, msg_body):
         msg_data = msg_body.split(';')
@@ -112,11 +112,10 @@ class AiClientMain(ClientMain):
         else:
             self.agent.save_brain_weights()
             self.renderer.stop()
-        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
 
     def map_reset_callback(self):
-        self.net_client.send_message(MessageTypes.ClientReady.value, "1")
-
+        self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
 
     def game_loop(self):
         cur_frame = time.time()

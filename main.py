@@ -6,8 +6,5 @@ import struct
 import sys
 
 if __name__ == '__main__':
-    my_bytes1 = struct.pack("!i", 0)
-    my_bytes2 = b'1111'
-    my_bytes = my_bytes1 + my_bytes2
-    result = struct.unpack("!i", my_bytes[0])
-    print(result)
+    my_bytes = b'00000000'
+    print(len(my_bytes))

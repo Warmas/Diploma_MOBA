@@ -5,6 +5,7 @@ import traceback
 
 from Common.src.network.tsdeque import TsDeque
 from Common.src.network.connection import Connection
+from Common.src.network.message import Message
 
 
 class Client:
@@ -56,21 +57,16 @@ class Client:
             self.exc_mutex.release()
 
     def process_all_messages(self):
-        if not self.messages_in.empty():
+        while not self.messages_in.empty():
             msg = self.messages_in.front()
             self.process_message_callback(msg)
             self.messages_in.pop_left()
-            self.process_all_messages()
 
-    def send_message(self, message_id, message_data):
+    def send_message(self, msg_id, msg_body, is_body_string=False):
         if self.connection_object.is_connected:
-            self.connection_object.send_message(self.sock, message_id, message_data)
-        else:
-            print("Connection is closed, message send failed!")
-
-    def send_bytes(self, message_id, message_data):
-        if self.connection_object.is_connected:
-            self.connection_object.send_bytes(self.sock, message_id, message_data)
+            msg = Message()
+            msg.set_message(msg_id, msg_body, is_body_string)
+            self.connection_object.send_message(self.sock, msg)
         else:
             print("Connection is closed, message send failed!")
 

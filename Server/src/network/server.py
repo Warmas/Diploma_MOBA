@@ -5,6 +5,7 @@ import traceback
 
 from Common.src.network.tsdeque import TsDeque
 from Common.src.network.connection import Connection
+from Common.src.network.message import Message
 
 
 class Server:
@@ -72,31 +73,30 @@ class Server:
             return False
 
     def process_all_messages(self):
-        if not self.messages_in.empty():
+        while not self.messages_in.empty():
             msg = self.messages_in.front()
             self.process_message_callback(msg)
             self.messages_in.pop_left()
-            self.process_all_messages()
 
-    def message_all(self, msg_id, msg_body):
+    def send_message(self, sock, msg_id, msg_body, is_body_string=False):
+        msg = Message()
+        msg.set_message(msg_id, msg_body, is_body_string)
+        self.connection_object.send_message(sock, msg)
+
+    def message_all(self, msg_id, msg_body, is_body_string=False):
         for sock in self.connection_list:
-            self.connection_object.send_message(sock, msg_id, msg_body)
+            self.send_message(sock, msg_id, msg_body, is_body_string)
 
-    def message_all_but_one(self, ignore, msg_id, msg_body):
+    def message_all_but_one(self, ignore, msg_id, msg_body, is_body_string=False):
         for sock in self.connection_list:
             if not sock == ignore:
-                self.connection_object.send_message(sock, msg_id, msg_body)
+                self.send_message(sock, msg_id, msg_body, is_body_string)
 
+    # Unused may be used later but unlikely.
     def send_updates(self):
-        for message in self.updates_out:
-            self.message_all(message)
+        for msg in self.updates_out:
+            self.message_all(msg)
         self.updates_out.clear()
-
-    def send_message(self, sock, message_id, message_data):
-        self.connection_object.send_message(sock, message_id, message_data)
-
-    def send_bytes(self, sock, message_id, message_data):
-        self.connection_object.send_bytes(sock, message_id, message_data)
 
     def get_connections_n(self):
         return len(self.connection_list)

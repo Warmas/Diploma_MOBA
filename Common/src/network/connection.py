@@ -2,7 +2,7 @@ import selectors
 import struct
 import threading
 
-from Common.src.network.message import Message, MessageTypes, OwnedMessage, BytesMessage, MessageToSend
+from Common.src.network.message import Message, OwnedMessage
 from Common.src.network.tsdeque import TsDeque
 
 
@@ -18,15 +18,12 @@ class Connection:
         self.error_callback = error_callback
 
     def read_message(self, sock):
-        msg_id, body_size = self.read_header(sock)
-        is_bytes = bool(msg_id == MessageTypes.Image.value)
-        msg_body = self.read_body(sock, body_size, not is_bytes)
-        if is_bytes:
-            msg = BytesMessage(sock, msg_id, msg_body)
-        elif self.is_server:
-            msg = OwnedMessage(sock, msg_id, msg_body)
+        if self.is_server:
+            msg = OwnedMessage(sock)
         else:
-            msg = Message(msg_id, msg_body)
+            msg = Message()
+        msg.header = self.read_header(sock)
+        msg.body = self.read_body(sock, msg.get_body_size())
         self.messages_in.append(msg)
 
     def read_header(self, sock):
@@ -37,13 +34,11 @@ class Connection:
         except Exception:
             self.error_callback(sock, "Message header read failed.")
         if msg_header:
-            msg_id = struct.unpack("!i", msg_header[:4])[0]
-            body_size = struct.unpack("!i", msg_header[4:])[0]
-            return msg_id, body_size
+            return msg_header
         else:
             self.error_callback(sock, "Empty message header.")
 
-    def read_body(self, sock, size, is_string):
+    def read_body(self, sock, size):
         msg_body = b''
         try:
             while len(msg_body) < size:
@@ -56,8 +51,6 @@ class Connection:
         except Exception:
             self.error_callback(sock, "Message body read failed.")
         if msg_body:
-            if is_string:
-                msg_body = msg_body.decode("utf-8")
             return msg_body
         else:
             self.error_callback(sock, "Empty message body.")
@@ -87,9 +80,8 @@ class Connection:
             self.writing_msg = False
             self.wm_mutex.release()
 
-    def send_message(self, sock, msg_id, msg_body):
-        msg_header, msg_body = OwnedMessage(sock, msg_id, msg_body).encode()
-        msg = MessageToSend(sock, msg_header, msg_body)
+    def send_message(self, sock, msg):
+        msg = OwnedMessage(sock, msg.header, msg.body)
         self.messages_out.append(msg)
         if not self.writing_msg:
             self.wm_mutex.acquire()
@@ -98,11 +90,3 @@ class Connection:
             write_thread = threading.Thread(target=self.write_message)
             write_thread.start()
             # self.write_message()
-
-    def send_bytes(self, sock, msg_id, msg_body):
-        writing_msg = not self.messages_out.empty()
-        msg_header, msg_body = BytesMessage(sock, msg_id, msg_body).encode()
-        msg = MessageToSend(sock, msg_header, msg_body)
-        self.messages_out.append(msg)
-        if not writing_msg:
-            self.write_message()
