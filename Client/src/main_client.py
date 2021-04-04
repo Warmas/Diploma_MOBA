@@ -328,7 +328,7 @@ class ClientMain:
             self.image_process(msg.body)
 
         elif msg_id == MessageTypes.TransitionData.value:
-            self.transition_data_process(msg.get_body_as_string())
+            self.transition_data_process(msg.body)
 
         elif msg_id == MessageTypes.TransferDone.value:
             self.transfer_done_callback()

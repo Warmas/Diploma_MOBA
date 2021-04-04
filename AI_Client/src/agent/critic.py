@@ -19,7 +19,7 @@ class CriticNn(nn.Module):
         conv_w = conv2d_size_out(conv2d_size_out(conv2d_size_out(width)))
         conv_h = conv2d_size_out(conv2d_size_out(conv2d_size_out(height)))
         linear_input_size = conv_w * conv_h * 32
-        linear_input_size += input_dim
+        #linear_input_size += input_dim
 
         self.conv_block = nn.Sequential(
             self.conv1,
@@ -38,24 +38,27 @@ class CriticNn(nn.Module):
             nn.Linear(linear_input_size, 1)
         )
 
-    def forward(self, state, action):
-        """Requires state.image and action as a tensor."""
-        pic_inp = self.conv_block(state.image)
-        inp = torch.cat((pic_inp, action), 0)
+    def forward(self, image, action="Not needed with this model"):
+        """Requires image as a flattened image."""
+        batch_size = image.shape[0]
+        image = image.reshape((batch_size, 3, 800, 1000))
+        image = image / 255
+        pic_inp = self.conv_block(image)
+        # inp = torch.cat((pic_inp, action), 0)
+        inp = pic_inp
         return self.linear_block(inp)
 
 
 class Critic:
     def __init__(self, device, screen_height, screen_width, n_disc_actions, n_cont_actions):
         # If gpu is to be used
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.n_action_inp = n_disc_actions + n_cont_actions
-        #  self.n_actions = env.action_space.n----
         self.brain = CriticNn(screen_height, screen_width, self.n_action_inp).to(self.device)
 
     def get_value(self, state):
         with torch.no_grad():
-            return self.brain(state).item()  # RELU6 FOR MOUSE xY ACTION ACTIVATION
+            return self.brain(state).item()
 
     def save_brain(self, name=None):
         if name:

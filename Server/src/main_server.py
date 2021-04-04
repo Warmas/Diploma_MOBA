@@ -88,7 +88,7 @@ class ServerMain:
             self.net_server.send_message(self.player_list[0].sock, MessageTypes.Image.value, msg.body)
 
         elif msg_id == MessageTypes.TransitionData.value:
-            self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransitionData.value, msg.get_body_as_string(), True)
+            self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransitionData.value, msg.body)
 
         elif msg_id == MessageTypes.TransferDone.value:
             self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransferDone.value, msg.body)

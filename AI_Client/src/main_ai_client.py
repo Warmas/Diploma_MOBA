@@ -10,7 +10,7 @@ from Common.src.game_objects.collision.collision_eval import *
 from AI_Client.src.agent.environment import *
 from AI_Client.src.agent.agent import Agent
 from AI_Client.src.agent.critic import Critic
-from AI_Client.src.agent.trainer import Trainer, Transition
+from AI_Client.src.agent.trainer import Trainer
 from AI_Client.src.agent.env_globals import *
 
 
@@ -28,6 +28,9 @@ class AiClientMain(ClientMain):
         self.critic_weight_path = critic_weight_path_root + "last_critic_weight.pth"
         self.is_new_train = True
         self.device = None
+        self.agent = None
+        self.critic = None
+        self.agent_trainer = None
         if not is_training:
             if torch.cuda.is_available():
                 print("Using cuda")
@@ -35,10 +38,8 @@ class AiClientMain(ClientMain):
             else:
                 print("Using cpu")
                 self.device = "cpu"
-            agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-            agent.load_brain_weights(self.agent_weight_path)
-            critic = None
-            trainer = None
+            self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            self.agent.load_brain_weights(self.agent_weight_path)
         else:
             if torch.cuda.is_available():
                 print("Using cuda")
@@ -46,15 +47,12 @@ class AiClientMain(ClientMain):
             else:
                 print("Using cpu")
                 self.device = "cpu"
-            agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-            critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            self.critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
             if not self.is_new_train:
-                agent.load_brain_weights(self.agent_weight_path)
-                critic.load_brain_weights(self.critic_weight_path)
-            trainer = Trainer(agent, critic)
-        self.agent = agent
-        self.critic = critic
-        self.agent_trainer = trainer
+                self.agent.load_brain_weights(self.agent_weight_path)
+                self.critic.load_brain_weights(self.critic_weight_path)
+            self.agent_trainer = Trainer(self.device, self.agent, self.critic)
         self.steps_done = 0
         self.agent_frame_delay = 0.15
         self.agent_frame_time = 0
@@ -73,38 +71,49 @@ class AiClientMain(ClientMain):
                     print("Finished transfer")
 
     def do_transfer(self):
-        for i in range(len(self.agent_trainer.memory.transitions)):
-            msg_body = ""
-            msg_body += str(i) + ';' + str(self.agent_trainer.memory.transitions[i].action.disc_action) \
-                               + ';' + str(self.agent_trainer.memory.transitions[i].action.mouse_x) \
-                               + ';' + str(self.agent_trainer.memory.transitions[i].action.mouse_y) \
-                               + ';' + str(self.agent_trainer.memory.transitions[i].reward)
-            self.net_client.send_message(MessageTypes.TransitionData.value, msg_body, True)
-            msg_body = struct.pack("!i", i)
-            msg_body += self.agent_trainer.memory.transitions[i].state.image
-            self.net_client.send_message(MessageTypes.Image.value, msg_body)
+        for trans_n in range(len(self.agent_trainer.memory)):
+            transition = self.agent_trainer.memory.get_transition(trans_n)
+            msg_body = struct.pack("!i", trans_n)
+            msg_body += struct.pack("!i", transition.disc_action)
+            msg_body += struct.pack("!i", transition.reward)
+            msg_body += struct.pack("!f", transition.act_prob.disc_act_prob)
+            msg_body += struct.pack("!f", transition.act_prob.mouse_x_prob)
+            msg_body += struct.pack("!f", transition.act_prob.mouse_y_prob)
+            msg_body += transition.state[0].tobytes()  # Image data
+            self.net_client.send_message(MessageTypes.TransitionData.value, msg_body)
+            #self.net_client.send_message(MessageTypes.Image.value, msg_body)
         self.net_client.send_message(MessageTypes.TransferDone.value, b'1')
         self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
 
     def transition_data_process(self, msg_body):
-        msg_data = msg_body.split(';')
-        tran_n = int(msg_data[0])
-        tran_disc_act = int(msg_data[1])
-        tran_mouse_x = float(msg_data[2])
-        tran_mouse_y = float(msg_data[3])
-        tran_rew = int(msg_data[4])
-        tran_act = Action(tran_disc_act, tran_mouse_x, tran_mouse_y)
-        tran = Transition(State(None), tran_act, tran_rew, None)
-        self.agent_trainer.remote_memory.push(tran)
+        tran_n = struct.unpack("!i", msg_body[:4])[0]
+        disc_act = struct.unpack("!i", msg_body[4:8])[0]
+        reward = struct.unpack("!i", msg_body[8:12])[0]
+        disc_act_prob = struct.unpack("!f", msg_body[12:16])[0]
+        mouse_x_prob = struct.unpack("!f", msg_body[16:20])[0]
+        mouse_y_prob = struct.unpack("!f", msg_body[20:24])[0]
+        image = np.frombuffer(msg_body[24:], dtype=np.uint8)
+        act_prob = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)
+        #act_prob = torch.stack((torch.tensor(disc_act_prob),
+        #                        torch.tensor(mouse_x_prob),
+        #                        torch.tensor(mouse_y_prob)), dim=0).to(self.device)
+
+        tran = Transition(State(image), disc_act, reward, act_prob)
+        # If there were more agents each agent's message would include it's number but we only have one.
+        self.agent_trainer.memory_list[1].push(tran)
+        print("Image processed: ", tran_n)
 
     def image_process(self, msg_body):
         tran_n = struct.unpack("!i", msg_body[:4])[0]
         image = np.frombuffer(msg_body[4:], dtype=np.uint8)
-        self.agent_trainer.remote_memory.transitions[tran_n].state.image = image
+        #image = torch.tensor(np.asarray(image), dtype=torch.float).to(self.device)
+        self.agent_trainer.memory_list[1].state_list.append(State(image))
         print("Image processed: ", tran_n)
 
     def transfer_done_callback(self):
-        self.agent_trainer.optimize_models()
+        actor_loss_list, critic_loss_list = self.agent_trainer.optimize_models()
+        print("Actor loss: ", actor_loss_list, "\nCritic loss: ", critic_loss_list)
+        print("Optimize stepped.")
         self.cur_episode_n += 1
         if self.cur_episode_n < self.episode_n:
             # self.agent_env.reset()
@@ -113,6 +122,7 @@ class AiClientMain(ClientMain):
             self.agent.save_brain_weights()
             self.renderer.stop()
         self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
+        print("Optimize done!")
 
     def map_reset_callback(self):
         self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
@@ -167,30 +177,17 @@ class AiClientMain(ClientMain):
         if cur_frame - self.agent_frame_time > self.agent_frame_delay:
             self.agent_frame_time = cur_frame
             image = self.renderer.get_image()
-            # image2 = image.reshape(1, 3, 800, 1000)
-            # image = image.reshape(2400000)
-            # image_bytes = image.tobytes()
-            # image = np.frombuffer(image, dtype=np.uint8)
+            image_flatten = image.flatten()
+            state = State(image_flatten)
 
-            if not self.is_first_player:
-                image_flatten = image.reshape(2400000)
-                image_bytes = image_flatten.tobytes()
-
-            image = image.reshape(1, 3, 800, 1000)
-            image = torch.FloatTensor(np.asarray(image)).to(self.device)
-            state = State(image)
-            policy = self.agent.select_action(state, self.steps_done)
-            log_prob = policy[1]
-            obs, reward, done, info = self.agent_env.step(policy[0])
+            image_t = torch.tensor([np.asarray(image_flatten)], dtype=torch.float).to(self.device)
+            action, act_prob = self.agent.select_action(image_t, self.steps_done)
+            del image_t
+            obs, reward, done, info = self.agent_env.step(action)
             if self.is_training:
                 self.steps_done += 1
-                if not self.is_first_player:
-                    del image
-                    state.image = image_bytes
-                transition = Transition(state, policy[0], reward, log_prob)
-                if self.agent_trainer.memory.push(transition):
-                    pass
-                else:
+                transition = Transition(state, action.disc_action, reward, act_prob)
+                if not self.agent_trainer.memory.push(transition):
                     print("Training memory full")
                     done = True
                 if done:

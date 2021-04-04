@@ -40,15 +40,20 @@ class AgentNn(nn.Module):
             nn.Linear(linear_input_size, output_dim)
         )
 
-    def forward(self, state):
-        inp = self.conv_block(state.image)
+    def forward(self, image):
+        """Requires image as a flattened image."""
+        batch_size = image.shape[0]
+        image = image.reshape((batch_size, 3, 800, 1000))  # THIS GIVES WRONG PICTURE, NOT SEPARATED INTO 3 CHANNELS, SHAPED WRONG
+        image = image / 255
+        pic_inp = self.conv_block(image)
+        inp = pic_inp
         return self.linear_block(inp)
 
 
 class Agent:
     def __init__(self, device, screen_height, screen_width, n_disc_actions, n_cont_actions):
         # If gpu is to be used
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         screen_width = 1000
         screen_height = 800
         self.n_outputs = n_disc_actions + n_cont_actions  # env.action_space.n
@@ -57,40 +62,46 @@ class Agent:
         self.EPS_END = 0.05
         self.EPS_DECAY = 200
 
-    def select_action(self, state, steps_done):
-        """Returns a tuple, the first item is the Action object, the second one is the policy distribution."""
+    def select_action(self, image_t, steps_done):
+        """Returns namedtuple-s, the first one is the Action, the second one is the probabilities of the action."""
         #sample = random.random()
         sample = 1
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * steps_done / self.EPS_DECAY)
         # Exploit
         if sample > eps_threshold:
             with torch.no_grad():
-                policy = self.brain(state)
+                policy = self.brain(image_t)
                 disc_policy = torch.narrow(policy, 1, 0, DISC_ACTION_N)
-                disc_act_prob = nn_func.softmax(disc_policy, dim=1)
-                policy_distribution = Categorical(disc_act_prob)
-                disc_action = policy_distribution.sample().item()
+                disc_probs = nn_func.softmax(disc_policy, dim=1)
+                disc_policy_distribution = Categorical(disc_probs)
+                disc_action = disc_policy_distribution.sample().item()
+                disc_act_prob = disc_probs[0, disc_action]
                 cont_action = torch.narrow(policy, 1, DISC_ACTION_N, CONT_ACTION_N)
-                cont_action = torch.clamp(cont_action, 0, 1)
-                mouse_x = cont_action.data[0][0].item() * SCREEN_WIDTH
-                mouse_y = cont_action.data[0][1].item() * SCREEN_HEIGHT
+                cont_action = torch.clamp(cont_action, 0.0001, 1)  # Can't be 0 as it would divide by 0 later on.
+                mouse_x_prob = cont_action[0][0]
+                mouse_y_prob = cont_action[0][1]
+                mouse_x = mouse_x_prob.item() * SCREEN_WIDTH
+                mouse_y = mouse_y_prob.item() * SCREEN_HEIGHT
                 action = Action(disc_action, mouse_x, mouse_y)
-                policy_out = torch.cat((disc_act_prob, cont_action), dim=1)
-                policy_distribution = Categorical(policy_out)
-                return action, policy_distribution
+                prob_out = ActionProb(disc_act_prob.item(), mouse_x_prob.item(), mouse_y_prob.item())
+                # prob_out = torch.stack((disc_act_prob, mouse_x_prob, mouse_y_prob), dim=0)
+                return action, prob_out
         # Explore
         else:
             return torch.tensor([[random.randrange(self.n_outputs)]], device=self.device, dtype=torch.long)
 
-    def get_policy(self, state):
-        policy = self.brain(state)
+    def get_act_prob(self, image_t, disc_action):
+        policy = self.brain(image_t)  #this is where it all goes wrong with the indexing have to fix it for batching
         disc_policy = torch.narrow(policy, 1, 0, DISC_ACTION_N)
-        disc_act_prob = nn_func.softmax(disc_policy, dim=1)
+        disc_probs = nn_func.softmax(disc_policy, dim=1)
+        # Get the probability of the action that was chosen previously
+        disc_act_prob = disc_probs.gather(1, disc_action.unsqueeze(1))
         cont_action = torch.narrow(policy, 1, DISC_ACTION_N, CONT_ACTION_N)
-        cont_action = torch.clamp(cont_action, 0, 1)
-        policy_out = torch.cat((disc_act_prob, cont_action), dim=1)
-        policy_distribution = Categorical(policy_out)
-        return policy_distribution
+        cont_action = torch.clamp(cont_action, 0.0001, 1)
+        # mouse_x_prob = cont_action.index_select(1, torch.tensor([0]).to(self.device))
+        # mouse_y_prob = cont_action.index_select(1, torch.tensor([1]).to(self.device))
+        prob_out = torch.cat((disc_act_prob, cont_action), dim=1)
+        return prob_out
 
     def save_brain(self, name=None):
         if name:

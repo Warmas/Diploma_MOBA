@@ -1,15 +1,16 @@
-class State:
-    def __init__(self, image):
-        """Image needs to be a tensor."""
-        self.image = image
-        # More inputs like cooldown if required
+from collections import namedtuple
+
+State = namedtuple("State", "image")
+Action = namedtuple("Action", ("disc_action", "mouse_x", "mouse_y"))
+ActionProb = namedtuple("ActionProb", ("disc_act_prob", "mouse_x_prob", "mouse_y_prob"))
 
 
-class Action:
-    def __init__(self, disc_action, mouse_x, mouse_y):
+class Transition:
+    def __init__(self, state, disc_action, reward, act_prob):
+        self.state = state
         self.disc_action = disc_action
-        self.mouse_x = mouse_x
-        self.mouse_y = mouse_y
+        self.reward = reward
+        self.act_prob = act_prob
 
 
 DISC_ACTION_N = 6
