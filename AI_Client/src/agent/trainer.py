@@ -60,7 +60,7 @@ class TrainingMemory:
 
 class Trainer:
     def __init__(self, device, agent, critic):
-        self.GAMMA = 0.999
+        self.GAMMA = 0.99  # If we can increase it to 0.999 but this is for now
         self.TARGET_UPDATE = 10
         self.CLIP_PARAM = 0.2
         self.LR_ACTOR = 1e-3
@@ -68,8 +68,8 @@ class Trainer:
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2
-        self.MEMORY_CAPACITY = 10
-        self.BATCH_SIZE = 5
+        self.MEMORY_CAPACITY = 512
+        self.BATCH_SIZE = 32
 
         self.device = device
         self.agent = agent
@@ -78,7 +78,7 @@ class Trainer:
         self.actor_optimizer = optim.Adam(self.agent.brain.parameters(), self.LR_ACTOR)
         self.critic_optimizer = optim.Adam(self.critic.brain.parameters(), self.LR_CRITIC)
 
-        self.memory = TrainingMemory(self.MEMORY_CAPACITY) # 200 max talán?
+        self.memory = TrainingMemory(self.MEMORY_CAPACITY)  # ~200 max with all of them on GPU
         self.memory_list = []
         self.memory_list.append(self.memory)
         # We add memory for each remote agent
@@ -90,7 +90,7 @@ class Trainer:
             memory = self.memory_list[mem_n]
             mem_len = len(memory)
             # Discount the rewards
-            for trans_n in range(mem_len - 2, -1, -1):  # Equivalent with memory_transitions[-2::-1] loop
+            for trans_n in range(mem_len - 2, -1, -1):  # Equivalent with memory.reward_list[-2::-1] loop
                 memory.reward_list[trans_n] += memory.reward_list[trans_n + 1] * self.GAMMA
             memory.is_r_disc = True
 
@@ -112,6 +112,7 @@ class Trainer:
                 batch_disc_act_list.append(all_memory.disc_act_list[index])
                 batch_reward_list.append(all_memory.reward_list[index])
                 batch_act_prob_list.append(all_memory.act_prob_list[index])
+            # This process has many ways to be done and this one is most likely not the fastest but good enough.
             batch_images_t = torch.tensor(batch_image_list).to(self.device).detach()
             batch_disc_acts_t = torch.tensor(batch_disc_act_list, dtype=torch.int64).to(self.device).detach()
             batch_rewards_t = torch.tensor(batch_reward_list).to(self.device).detach()
@@ -177,3 +178,7 @@ class Trainer:
         nn.utils.clip_grad_norm(self.critic.brain.parameters(), self.GRAD_NORM)
         self.critic_optimizer.step()
         return value_loss.view(-1, 1).item()
+
+    def clear_memory(self):
+        for memory in self.memory_list:
+            memory.clear_memory()

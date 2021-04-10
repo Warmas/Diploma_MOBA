@@ -5,11 +5,17 @@ import torch
 import struct
 import sys
 from collections import namedtuple
+from collections import deque
+import torch.nn.functional as nn_func
 
 class MyClass:
     def __init__(self):
         self.asd = 1
         self.asd2 = 2
+
+
+def asd(mybytes, num):
+    mybytes += num
 
 
 if __name__ == '__main__':
@@ -18,4 +24,9 @@ if __name__ == '__main__':
     print(mytensor2)
     mytensor3 = torch.mul(mytensor, mytensor2)
     print(mytensor3)
+
+    myten1 = torch.tensor([[1, 2, 3]])
+    print(myten1)
+    print(myten1[0][0].item())
+
 

@@ -13,6 +13,8 @@ class KeyIds(Enum):
     Key_p = b'p'
     Key_o = b'o'
 
+# GLUT's Y coordinates are the flip of screen coordinates so keep that in mind!
+
 
 class Renderer:
     def __init__(self,
@@ -84,6 +86,20 @@ class Renderer:
         radius = self.player.radius
         glColor3f(0.0, 1.0, 0.0)
         self.draw_circle(pos, radius, side_num=8)
+        # Drawing the direction marker
+        tri_base_x = pos[0] + self.player.front[0] * radius
+        tri_base_y = pos[1] + self.player.front[1] * radius
+        point1_x = tri_base_x + self.player.front[0] * radius * 0.5
+        point1_y = tri_base_y + self.player.front[1] * radius * 0.5
+        point2_x = tri_base_x - self.player.front[1] * radius * 0.25
+        point2_y = tri_base_y + self.player.front[0] * radius * 0.25
+        point3_x = tri_base_x + self.player.front[1] * radius * 0.25
+        point3_y = tri_base_y - self.player.front[0] * radius * 0.25
+        glBegin(GL_TRIANGLES)
+        glVertex2f(point1_x, self.HEIGHT - point1_y)
+        glVertex2f(point2_x, self.HEIGHT - point2_y)
+        glVertex2f(point3_x, self.HEIGHT - point3_y)
+        glEnd()
         if self.player.level >= 2:
             glColor3f(0.0, 0.3, 0.2)
             self.draw_circle(pos, radius-10, side_num=8)
@@ -97,6 +113,20 @@ class Renderer:
         radius = enemy.radius
         glColor3f(1.0, 0.0, 0.0)
         self.draw_circle(pos, radius, side_num=10)
+        # Drawing the direction marker
+        tri_base_x = pos[0] + enemy.front[0] * radius
+        tri_base_y = pos[1] + enemy.front[1] * radius
+        point1_x = tri_base_x + enemy.front[0] * radius * 0.5
+        point1_y = tri_base_y + enemy.front[1] * radius * 0.5
+        point2_x = tri_base_x - enemy.front[1] * radius * 0.25
+        point2_y = tri_base_y + enemy.front[0] * radius * 0.25
+        point3_x = tri_base_x + enemy.front[1] * radius * 0.25
+        point3_y = tri_base_y - enemy.front[0] * radius * 0.25
+        glBegin(GL_TRIANGLES)
+        glVertex2f(point1_x, self.HEIGHT - point1_y)
+        glVertex2f(point2_x, self.HEIGHT - point2_y)
+        glVertex2f(point3_x, self.HEIGHT - point3_y)
+        glEnd()
         if enemy.level >= 2:
             glColor3f(0.375, 0.0625, 0.04)
             self.draw_circle(pos, radius-10, side_num=8)
@@ -159,6 +189,18 @@ class Renderer:
         radius = projectile.radius
         glColor3f(1.0, 0.5, 0.0)
         self.draw_circle(pos, radius=radius, side_num=10)
+        # Drawing the plume of the fireball
+        point1_x = pos[0] - projectile.front[0] * radius * 2
+        point1_y = pos[1] - projectile.front[1] * radius * 2
+        point2_x = pos[0] - projectile.front[1] * radius
+        point2_y = pos[1] + projectile.front[0] * radius
+        point3_x = pos[0] + projectile.front[1] * radius
+        point3_y = pos[1] - projectile.front[0] * radius
+        glBegin(GL_TRIANGLES)
+        glVertex2f(point1_x, self.HEIGHT - point1_y)
+        glVertex2f(point2_x, self.HEIGHT - point2_y)
+        glVertex2f(point3_x, self.HEIGHT - point3_y)
+        glEnd()
         if projectile.owner == self.player.player_id:
             glColor3f(0.0, 1.0, 0.0)
         else:

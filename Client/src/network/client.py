@@ -59,8 +59,8 @@ class Client:
     def process_all_messages(self):
         while not self.messages_in.empty():
             msg = self.messages_in.front()
-            self.process_message_callback(msg)
             self.messages_in.pop_left()
+            self.process_message_callback(msg)
 
     def send_message(self, msg_id, msg_body, is_body_string=False):
         if self.connection_object.is_connected:

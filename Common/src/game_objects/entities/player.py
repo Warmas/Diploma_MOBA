@@ -14,10 +14,20 @@ class Player(Entity):
         self.cd_4_start = 0
 
     def gain_exp(self, amount):
-        self.experience += amount
+        if self.level < self.max_level:
+            self.experience += amount
         if self.experience >= (100 + 20 * (self.level - 1)):
             if self.level < self.max_level:
                 self.experience = self.experience - (100 + 20 * (self.level - 1))
                 self.level += 1
             else:
-                self.experience = (100 + 20 * (self.level - 1))
+                self.experience = 0
+
+    def reset_stats(self):
+        self.level = 1
+        self.experience = 0
+        self.health = self.max_health
+        self.cd_1_start = 0
+        self.cd_2_start = 0
+        self.cd_3_start = 0
+        self.cd_4_start = 0

@@ -1,4 +1,5 @@
 import time
+import struct
 
 import Client.src.network.client as net
 from Client.src.render.renderer import *
@@ -52,13 +53,14 @@ class ClientMain:
         self.net_client.send_message(MessageTypes.Authentication.value, self.player_id, True)
         while not self.is_auth_comp:
             self.process_incoming_messages()
-        self.net_client.send_message(MessageTypes.ClientReady.value, "1", True)
+        self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         while not self.start_game:
             self.process_incoming_messages()
         self.renderer.start()
 
     def ping_server(self):
-        self.net_client.send_message(MessageTypes.PingServer.value, str(time.time()), True)
+        msg_body = struct.pack("!f", time.time())
+        self.net_client.send_message(MessageTypes.PingServer.value, msg_body)
 
     def process_incoming_messages(self):
         self.net_client.process_all_messages()
@@ -66,7 +68,8 @@ class ClientMain:
     def process_message(self, msg):
         msg_id = msg.get_msg_id()
         if msg_id == MessageTypes.PingServer.value:
-            print("Server ping: ", (time.time() - float(msg.get_body_as_string())))
+            send_time = struct.unpack("!f", msg.body)[0]
+            print("Server ping: ", (time.time() - send_time))
 
         elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from server: ", msg.get_body_as_string())
@@ -319,13 +322,18 @@ class ClientMain:
         elif msg_id == MessageTypes.StartGame.value:
             self.start_game = True
 
+        elif msg_id == MessageTypes.ResetMap.value:
+            self.map_reset_callback(msg)
+
         # AI training stuff
         elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
-                self.pause_loop()
-
-        elif msg_id == MessageTypes.Image.value:
-            self.image_process(msg.body)
+                game_over = False
+                loser_id = ""
+                if msg.get_int() == 2:
+                    game_over = True
+                    loser_id = msg.get_string()
+                self.pause_loop(game_over, loser_id)
 
         elif msg_id == MessageTypes.TransitionData.value:
             self.transition_data_process(msg.body)
@@ -333,16 +341,69 @@ class ClientMain:
         elif msg_id == MessageTypes.TransferDone.value:
             self.transfer_done_callback()
 
-    def pause_loop(self):
-        pass
+        elif msg_id == MessageTypes.OptimizeDone.value:
+            self.optimize_done_callback()
 
-    def image_process(self, msg_body):
+    def map_reset_callback(self, msg):
+        self.projectile_list.clear()
+        self.aoe_list.clear()
+        self.player.reset_stats()
+        for enemy in self.enemy_list:
+            enemy.reset_stats()
+        self.mob_list.clear()
+        self.obstacle_list.clear()
+        self.heal_place_list.clear()
+
+        player_count = msg.get_int()
+        for i in range(player_count):
+            player_id = msg.get_string()
+            player_pos_x = msg.get_float()
+            player_pos_y = msg.get_float()
+            if player_id == self.player.player_id:
+                self.player.change_position(np.array([player_pos_x, player_pos_y]))
+            else:
+                for enemy in self.enemy_list:
+                    if enemy.player_id == player_id:
+                        enemy.change_position(np.array([player_pos_x, player_pos_y]))
+
+        mob_count = msg.get_int()
+        for i in range(mob_count):
+            mob_id = msg.get_int()
+            mob_pos_x = msg.get_float()
+            mob_pos_y = msg.get_float()
+            new_mob = Mob(mob_id)
+            new_mob.change_position(np.array([mob_pos_x, mob_pos_y]))
+            self.mob_list.append(new_mob)
+
+        obs_count = msg.get_int()
+        for i in range(obs_count):
+            obs_pos_x = msg.get_float()
+            obs_pos_y = msg.get_float()
+            obs_pos = np.array([obs_pos_x, obs_pos_y])
+            new_obs = CircleObstacle(obs_pos)
+            self.obstacle_list.append(new_obs)
+
+        h_place_count = msg.get_int()
+        for i in range(h_place_count):
+            h_place_id = msg.get_int()
+            h_place_x = msg.get_float()
+            h_place_y = msg.get_float()
+            h_place_pos = np.array([h_place_x, h_place_y])
+            new_h_place = HealPlace(h_place_id, h_place_pos)
+            self.heal_place_list.append(new_h_place)
+
+        self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
+
+    def pause_loop(self, game_over=False, loser_id=""):
         pass
 
     def transition_data_process(self, msg_body):
         pass
 
     def transfer_done_callback(self):
+        pass
+
+    def optimize_done_callback(self):
         pass
 
     def keyboard_callback(self, key, x, y):
@@ -478,6 +539,7 @@ class ClientMain:
 
         self.renderer.render()
         """
+        # Some of the the "client-sided" code
         proj_remove_list = []
         for proj in self.projectile_list:
             proj.move()

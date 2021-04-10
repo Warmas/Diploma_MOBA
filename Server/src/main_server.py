@@ -1,6 +1,8 @@
-import numpy as np
 import time
 import random
+import struct
+
+import numpy as np
 
 import Server.src.network.server as net
 from Common.src.network.message import MessageTypes
@@ -38,15 +40,16 @@ class ServerMain:
         self.map_reset()
         while self.client_ready_counter < 2:
             self.net_server.process_all_messages()
-        self.net_server.message_all(MessageTypes.StartGame.value, "1", True)
+        self.net_server.message_all(MessageTypes.StartGame.value, b'1')
         while True:
             self.server_loop()
 
     def process_message(self, msg):
         msg_id = msg.get_msg_id()
         if msg_id == MessageTypes.PingServer.value:
-            # print(time.time() - float(msg.body))
-            self.net_server.send_message(msg.socket, MessageTypes.PingServer.value, str(msg.get_body_as_string()), True)
+            # send_time = struct.unpack("!f", msg.body)[0]
+            # print(time.time() - send_time)
+            self.net_server.send_message(msg.socket, MessageTypes.PingServer.value, msg.body)
 
         elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from client: ", msg.socket.getpeername(), msg.body)
@@ -75,17 +78,11 @@ class ServerMain:
             self.client_ready_counter += 1
 
         # AI training stuff
-        elif msg_id == MessageTypes.ResetMap:
-            self.map_reset()
-
         elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
                 self.is_paused = True
                 self.client_ready_counter = 0
                 self.pause_loop()
-
-        elif msg_id == MessageTypes.Image.value:
-            self.net_server.send_message(self.player_list[0].sock, MessageTypes.Image.value, msg.body)
 
         elif msg_id == MessageTypes.TransitionData.value:
             self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransitionData.value, msg.body)
@@ -93,19 +90,26 @@ class ServerMain:
         elif msg_id == MessageTypes.TransferDone.value:
             self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransferDone.value, msg.body)
 
+        elif msg_id == MessageTypes.OptimizeDone.value:
+            self.net_server.message_all_but_one(self.player_list[0].sock, MessageTypes.OptimizeDone.value, msg.body)
+
     def connection_lost(self, sock):
         player = self.get_player_for_socket(sock)
         if player in self.player_list:
             self.player_list.remove(player)
 
     def map_reset(self):
+        self.projectile_list.clear()
+        self.aoe_list.clear()
+        for player in self.player_list:
+            player.reset_stats()
+        self.mob_list.clear()
+        self.obstacle_list.clear()
+        self.heal_place_list.clear()
         for i in range(len(self.player_list)):
             pos_x = 50.0 + 900 * (i % 2)
             pos_y = 400.0
             self.player_list[i].change_position(np.array([pos_x, pos_y]))
-        self.mob_list.clear()
-        self.obstacle_list.clear()
-        self.heal_place_list.clear()
         for i in range(self.MOB_COUNT):
             mob = Mob(i)
             x = random.randint(150, 850)
@@ -126,7 +130,31 @@ class ServerMain:
         self.heal_place_list.append(heal_place2)
 
         self.client_ready_counter = 0
-        #self.net_server.
+
+    def create_map_reset_msg(self):
+        msg_body = b''
+        msg_body += struct.pack("!i", len(self.player_list))
+        for player in self.player_list:
+            length = struct.pack("!i", len(player.player_id))
+            msg_body += length
+            msg_body += player.player_id.encode("utf-8")
+            msg_body += struct.pack("!f", player.position[0])
+            msg_body += struct.pack("!f", player.position[1])
+        msg_body += struct.pack("!i", len(self.mob_list))
+        for mob in self.mob_list:
+            msg_body += struct.pack("!i", mob.mob_id)
+            msg_body += struct.pack("!f", mob.position[0])
+            msg_body += struct.pack("!f", mob.position[1])
+        msg_body += struct.pack("!i", len(self.obstacle_list))
+        for obs in self.obstacle_list:
+            msg_body += struct.pack("!f", obs.position[0])
+            msg_body += struct.pack("!f", obs.position[1])
+        msg_body += struct.pack("!i", len(self.heal_place_list))
+        for h_place in self.heal_place_list:
+            msg_body += struct.pack("!i", h_place.id)
+            msg_body += struct.pack("!f", h_place.position[0])
+            msg_body += struct.pack("!f", h_place.position[1])
+        return msg_body
 
     def client_authentication(self, sock, client_id):
         msg_to_send = ""
@@ -243,11 +271,31 @@ class ServerMain:
                                     + str(m_to_check.position[0]) + ',' + str(m_to_check.position[1])
             self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
-    def pause_loop(self):
-        self.net_server.message_all(MessageTypes.PauseGame.value, "1", True)
+    def pause_loop(self, game_over=False, loser_id=""):
+        msg_body = b''
+        if game_over:
+            msg_body += struct.pack("!i", 2)
+            msg_body += struct.pack("!i", len(loser_id))
+            msg_body += loser_id.encode("utf-8")
+        else:
+            msg_body += struct.pack("!i", 1)
+        self.net_server.message_all(MessageTypes.PauseGame.value, msg_body)
+        self.client_ready_counter = 0
         connections_n = self.net_server.get_connections_n()
         while self.client_ready_counter < connections_n:
             self.net_server.process_all_messages()
+        if game_over:
+            print("Resetting map!")
+            self.client_ready_counter = 0
+            self.map_reset()
+            msg_body = self.create_map_reset_msg()
+            self.net_server.message_all(MessageTypes.ResetMap.value, msg_body)
+            while self.client_ready_counter < connections_n:
+                self.net_server.process_all_messages()
+        print("Continuing game!")
+        self.is_paused = False
+        self.last_frame = time.time()
+        self.net_server.message_all(MessageTypes.StartGame.value, b'1')
 
     def server_loop(self):
         cur_frame = time.time()
@@ -263,14 +311,14 @@ class ServerMain:
             player.update_front()
         for mob in self.mob_list:
             mob.update_front()
-        self.detect_collisions()
+        self.detect_collisions(cur_frame)
         for player in self.player_list:
             player.move(self.delta_t)
         for mob in self.mob_list:
             mob.move(self.delta_t)
         self.net_server.send_updates()
 
-    def detect_collisions(self):
+    def detect_collisions(self, cur_frame):
         player_hp_update_list = []
         mob_hp_update_list = []
         proj_remove_list = []
@@ -324,7 +372,7 @@ class ServerMain:
 
         aoe_remove_list = []
         for aoe in self.aoe_list:
-            time_on = self.last_frame + self.delta_t - aoe.cast_time
+            time_on = cur_frame - aoe.cast_time
             if aoe.duration < time_on:
                 aoe_remove_list.append(aoe)
             else:
@@ -396,7 +444,7 @@ class ServerMain:
 
         for player in player_hp_update_list:
             if player.health < 0:
-                self.pause_loop()
+                self.pause_loop(game_over=True, loser_id=player.player_id)
 
     def mob_detect(self):
         mob_move_list = []

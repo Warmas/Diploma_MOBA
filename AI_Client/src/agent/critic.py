@@ -55,6 +55,8 @@ class Critic:
         self.device = device
         self.n_action_inp = n_disc_actions + n_cont_actions
         self.brain = CriticNn(screen_height, screen_width, self.n_action_inp).to(self.device)
+        self.MODEL_ROOT = "AI_Client/neural_nets/models/critic/"
+        self.WEIGHT_ROOT = "AI_Client/neural_nets/weights/critic/"
 
     def get_value(self, state):
         with torch.no_grad():
@@ -62,22 +64,25 @@ class Critic:
 
     def save_brain(self, name=None):
         if name:
-            torch.save(self.brain, "AI_Client/neural_nets/models/critic" + name + ".pth")
+            torch.save(self.brain, "AI_Client/neural_nets/models/critic/" + name + ".pth")
         else:
-            torch.save(self.brain, "AI_Client/neural_nets/models/agent" + str(time.time())[:10] + ".pth")
+            torch.save(self.brain, "AI_Client/neural_nets/models/critic/" + str(time.time())[:10] + ".pth")
 
     def save_brain_weights(self, name=None):
         if name:
-            torch.save(self.brain.state_dict(), "AI_Client/neural_nets/weights/agent" + name + ".pth")
+            torch.save(self.brain.state_dict(), "AI_Client/neural_nets/weights/critic/" + name + ".pth")
         else:
             torch.save(self.brain.state_dict(),
-                       "AI_Client/neural_nets/weights/agent" + str(time.time())[:10] + ".pth")
+                       "AI_Client/neural_nets/weights/critic/" + str(time.time())[:10] + ".pth")
 
     def load_brain(self, name):
         self.brain = torch.load(name)
 
-    def load_brain_weights(self, name):
-        self.brain.load_state_dict(name)
+    def load_brain_weights(self, name, root_path=""):
+        if not len(root_path):
+            root_path = self.WEIGHT_ROOT
+        path = root_path + name + ".pth"
+        self.brain.load_state_dict(torch.load(path))
         self.brain.eval()
 
 

@@ -75,8 +75,8 @@ class Server:
     def process_all_messages(self):
         while not self.messages_in.empty():
             msg = self.messages_in.front()
-            self.process_message_callback(msg)
             self.messages_in.pop_left()
+            self.process_message_callback(msg)
 
     def send_message(self, sock, msg_id, msg_body, is_body_string=False):
         msg = Message()
@@ -92,10 +92,10 @@ class Server:
             if not sock == ignore:
                 self.send_message(sock, msg_id, msg_body, is_body_string)
 
-    # Unused may be used later but unlikely.
+    # Unused, may be used later but unlikely.
     def send_updates(self):
         for msg in self.updates_out:
-            self.message_all(msg)
+            self.message_all(msg.id, msg.body)
         self.updates_out.clear()
 
     def get_connections_n(self):

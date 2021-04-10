@@ -3,6 +3,11 @@ from gym.spaces import Tuple, Box, Discrete
 import numpy as np
 from OpenGL.GLUT import *
 
+# Taken the number of states we check the discount factor and the max rewards in a state this helps to normalize the
+# discounted reward values to be between -1 and 1
+# This is somewhat of a hyperparameter
+REWARD_UNIT = 1 / 40000
+
 
 class AgentEnv(gym.Env):
     def __init__(self, player, enemy_list, action1, action2, action3, action4, action5):
@@ -26,6 +31,7 @@ class AgentEnv(gym.Env):
         pass
 
     def step(self, my_action):
+        done = False
         mouse_x = my_action.mouse_x
         mouse_y = my_action.mouse_y
         if my_action.disc_action == 0:
@@ -41,19 +47,30 @@ class AgentEnv(gym.Env):
         if my_action.disc_action == 5:
             self.act5(mouse_x, mouse_y)
         reward = 0
-        reward += self.player.health - self.enemy_list[0].health
-        reward += (self.player.level - self.enemy_list[0].level) * 10
-        reward += int((self.player.experience - self.enemy_list[0].experience) * 0.05)
+        # Max= 100 hp = 100 unit
+        reward += (self.player.health - self.enemy_list[0].health) * REWARD_UNIT
+        # Max= 3 lvl * 10 = 30 unit
+        reward += (self.player.level - self.enemy_list[0].level) * 10 * REWARD_UNIT
+        # Max= 120 xp * 0.05 = 6 unit
+        reward += int((self.player.experience - self.enemy_list[0].experience) * 0.05) * REWARD_UNIT
         if self.player.health < 0:
-            reward -= 1000
+            reward -= 1000 * REWARD_UNIT
         elif self.enemy_list[0].health < 0:
-            reward += 1000
-
+            reward += 1000 * REWARD_UNIT
+        # Max reward in one state: 1130 unit
+        # Max reward in a state which for multiple times: 129 unit
         observation = None
-        done = False
         info = "Nothing"
         return observation, reward, done, info
 
     # Pointless here as the rendered image itself is an input for the agent, while deciding on an action.
     def render(self, mode='human'):
         pass
+
+    @staticmethod
+    def get_lose_reward():
+        return - 1000 * REWARD_UNIT
+
+    @staticmethod
+    def get_win_reward():
+        return 1000 * REWARD_UNIT

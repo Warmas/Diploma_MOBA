@@ -54,19 +54,19 @@ class Agent:
     def __init__(self, device, screen_height, screen_width, n_disc_actions, n_cont_actions):
         # If gpu is to be used
         self.device = device
-        screen_width = 1000
-        screen_height = 800
-        self.n_outputs = n_disc_actions + n_cont_actions  # env.action_space.n
-        self.brain = AgentNn(screen_height, screen_width, self.n_outputs).to(self.device)
+        self.n_outputs = DISC_ACTION_N + CONT_ACTION_N
+        self.brain = AgentNn(SCREEN_HEIGHT, SCREEN_WIDTH, self.n_outputs).to(self.device)
         self.EPS_START = 0.9
         self.EPS_END = 0.05
         self.EPS_DECAY = 200
+        self.MODEL_ROOT = "AI_Client/neural_nets/models/actor/"
+        self.WEIGHT_ROOT = "AI_Client/neural_nets/weights/actor/"
 
     def select_action(self, image_t, steps_done):
         """Returns namedtuple-s, the first one is the Action, the second one is the probabilities of the action."""
-        #sample = random.random()
-        sample = 1
+        sample = random.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * steps_done / self.EPS_DECAY)
+        eps_threshold = 0.1
         # Exploit
         if sample > eps_threshold:
             with torch.no_grad():
@@ -77,7 +77,7 @@ class Agent:
                 disc_action = disc_policy_distribution.sample().item()
                 disc_act_prob = disc_probs[0, disc_action]
                 cont_action = torch.narrow(policy, 1, DISC_ACTION_N, CONT_ACTION_N)
-                cont_action = torch.clamp(cont_action, 0.0001, 1)  # Can't be 0 as it would divide by 0 later on.
+                cont_action = torch.clamp(cont_action, 0.0001, 1)  # Can't be 0 as it would divide by 0 later on!
                 mouse_x_prob = cont_action[0][0]
                 mouse_y_prob = cont_action[0][1]
                 mouse_x = mouse_x_prob.item() * SCREEN_WIDTH
@@ -88,37 +88,55 @@ class Agent:
                 return action, prob_out
         # Explore
         else:
-            return torch.tensor([[random.randrange(self.n_outputs)]], device=self.device, dtype=torch.long)
+            disc_action = random.randint(0, DISC_ACTION_N - 1)
+            mouse_x = random.randint(0, SCREEN_WIDTH)
+            mouse_y = random.randint(0, SCREEN_HEIGHT)
+            action = Action(disc_action, mouse_x, mouse_y)
+            disc_action = torch.tensor([disc_action], dtype=torch.int64).to(self.device).detach()
+            with torch.no_grad():
+                prob_out = self.get_act_prob(image_t, disc_action)
+                prob_out = ActionProb(prob_out[0][0].item(), prob_out[0][1].item(), prob_out[0][2].item())
+            del disc_action
+            return action, prob_out
 
     def get_act_prob(self, image_t, disc_action):
-        policy = self.brain(image_t)  #this is where it all goes wrong with the indexing have to fix it for batching
+        policy = self.brain(image_t)
         disc_policy = torch.narrow(policy, 1, 0, DISC_ACTION_N)
         disc_probs = nn_func.softmax(disc_policy, dim=1)
         # Get the probability of the action that was chosen previously
         disc_act_prob = disc_probs.gather(1, disc_action.unsqueeze(1))
         cont_action = torch.narrow(policy, 1, DISC_ACTION_N, CONT_ACTION_N)
         cont_action = torch.clamp(cont_action, 0.0001, 1)
-        # mouse_x_prob = cont_action.index_select(1, torch.tensor([0]).to(self.device))
-        # mouse_y_prob = cont_action.index_select(1, torch.tensor([1]).to(self.device))
         prob_out = torch.cat((disc_act_prob, cont_action), dim=1)
         return prob_out
 
-    def save_brain(self, name=None):
-        if name:
-            torch.save(self.brain, "AI_Client/neural_nets/models/actor" + name + ".pth")
+    def save_brain(self, name="", root_path=""):
+        if not len(root_path):
+            root_path = self.MODEL_ROOT
+        if not len(name):
+            path = root_path + name + ".pth"
         else:
-            torch.save(self.brain, "AI_Client/neural_nets/models/actor" + str(time.time())[:10] + ".pth")
+            path = root_path + str(time.time())[:10] + ".pth"
+        torch.save(self.brain, path)
 
-    def save_brain_weights(self, name=None):
-        if name:
-            torch.save(self.brain.state_dict(), "AI_Client/neural_nets/weights/actor" + name + ".pth")
+    def save_brain_weights(self, name="", root_path=""):
+        if not len(root_path):
+            root_path = self.WEIGHT_ROOT
+        if not len(name):
+            path = root_path + name + ".pth"
         else:
-            torch.save(self.brain.state_dict(),
-                       "AI_Client/neural_nets/weights/actor" + str(time.time())[:10] + ".pth")
+            path = root_path + str(time.time())[:10] + ".pth"
+        torch.save(self.brain.state_dict(), path)
 
-    def load_brain(self, path):
+    def load_brain(self, name, root_path=""):
+        if not len(root_path):
+            root_path = self.MODEL_ROOT
+        path = root_path + name + ".pth"
         self.brain = torch.load(path)
 
-    def load_brain_weights(self, path):
+    def load_brain_weights(self, name, root_path=""):
+        if not len(root_path):
+            root_path = self.WEIGHT_ROOT
+        path = root_path + name + ".pth"
         self.brain.load_state_dict(torch.load(path))
         self.brain.eval()
