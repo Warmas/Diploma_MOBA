@@ -10,6 +10,8 @@ from AI_Client.src.agent.environment import *
 from AI_Client.src.agent.agent import Agent
 from AI_Client.src.agent.critic import Critic
 from AI_Client.src.agent.trainer import Trainer
+from AI_Client.src.agent.ppo_agent import PpoActorCritic
+from AI_Client.src.agent.actor_critic_trainer import ActorCriticTrainer
 from AI_Client.src.agent.env_globals import *
 
 
@@ -19,16 +21,17 @@ class AiClientMain(ClientMain):
         self.agent_env = AgentEnv(self.player, self.enemy_list,
                                   self.mouse_callback, self.cast_1, self.cast_2, self.cast_3, self.cast_4)
         self.is_training = is_training
-        self.episode_n = 50
+        self.MAX_EPISODE_N = 50
+        self.CHECKPOINT_EP_N = 10
         self.cur_episode_n = 1
-        agent_weight_path_root = "AI_Client/neural_nets/weights/actor/"
-        critic_weight_path_root = "AI_Client/neural_nets/weights/critic/"
+        agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
+        #critic_weight_path_root = "AI_Client/neural_nets/weights/critic/"
         self.agent_weight_path = agent_weight_path_root + "last_agent_weight.pth"
-        self.critic_weight_path = critic_weight_path_root + "last_critic_weight.pth"
+        #self.critic_weight_path = critic_weight_path_root + "last_critic_weight.pth"
         self.is_new_train = True
         self.device = None
         self.agent = None
-        self.critic = None
+        #self.critic = None
         self.agent_trainer = None
         if not is_training:
             if torch.cuda.is_available():
@@ -37,7 +40,8 @@ class AiClientMain(ClientMain):
             else:
                 print("Using cpu")
                 self.device = "cpu"
-            self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            #self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            self.agent = PpoActorCritic(self.device)
             self.agent.load_brain_weights(self.agent_weight_path)
         else:
             if torch.cuda.is_available():
@@ -46,12 +50,14 @@ class AiClientMain(ClientMain):
             else:
                 print("Using cpu")
                 self.device = "cpu"
-            self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-            self.critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            #self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            #self.critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+            self.agent = PpoActorCritic(self.device)
             if not self.is_new_train:
                 self.agent.load_brain_weights(self.agent_weight_path)
-                self.critic.load_brain_weights(self.critic_weight_path)
-            self.agent_trainer = Trainer(self.device, self.agent, self.critic)
+                #self.critic.load_brain_weights(self.critic_weight_path)
+            #self.agent_trainer = Trainer(self.device, self.agent, self.critic)
+            self.agent_trainer = ActorCriticTrainer(self.device, self.agent)
         self.steps_done = 0
         self.agent_frame_delay = 0.15
         self.agent_frame_time = 0
@@ -111,24 +117,24 @@ class AiClientMain(ClientMain):
         actor_loss_list, critic_loss_list = self.agent_trainer.optimize_models()
         print("Actor loss: ", actor_loss_list, "\nCritic loss: ", critic_loss_list)
         self.cur_episode_n += 1
-        if self.cur_episode_n < self.episode_n:
+        if self.cur_episode_n < self.MAX_EPISODE_N:
             print("Saving models...")
-            self.agent.save_brain_weights("temp_agent")
-            self.critic.save_brain_weights("temp_critic")
+            # We don't really need checkpoints as we have to save each episode anyway
+            if (self.cur_episode_n % self.CHECKPOINT_EP_N) == 0:
+                self.agent.save_brain_weights("temp_agent")
+            else:
+                self.agent.save_brain_weights("temp_agent")
             print("Saved models!")
+            self.agent_trainer.clear_memory()
+            self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
+            self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         else:
             self.agent.save_brain_weights("final_agent")
-            self.critic.save_brain_weights("final_critic")
             self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
-            self.renderer.stop()
-        self.agent_trainer.clear_memory()
-        self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
-        self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
 
     def optimize_done_callback(self):
         print("Loading new models...")
         self.agent.load_brain_weights("temp_agent")
-        self.critic.load_brain_weights("temp_critic")
         self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         print("Loaded new models!")
 
@@ -173,11 +179,13 @@ class AiClientMain(ClientMain):
         if cur_frame - self.agent_frame_time > self.agent_frame_delay:
             self.agent_frame_time = cur_frame
             image = self.renderer.get_image()
+            # Rearrange dimensions because the convolutional layer requires color channel matrixes not RGB matrix
+            image = np.transpose(image, (2, 1, 0))
             image_flatten = image.flatten()
             state = State(image_flatten)
 
             image_t = torch.from_numpy(np.asarray(image_flatten)).to(self.device)
-            action, act_prob = self.agent.select_action(image_t.unsqueeze(0), self.steps_done)
+            action, act_prob = self.agent.select_action(image_t.unsqueeze(0))
             del image_t
             obs, reward, done, info = self.agent_env.step(action)
             if self.is_training:

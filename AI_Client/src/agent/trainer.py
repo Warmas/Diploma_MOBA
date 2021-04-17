@@ -1,5 +1,5 @@
+# Deprecated
 import copy
-from statistics import mean
 
 import torch
 import torch.nn as nn

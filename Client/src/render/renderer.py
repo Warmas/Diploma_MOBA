@@ -18,7 +18,7 @@ class KeyIds(Enum):
 
 class Renderer:
     def __init__(self,
-                 pre_render_callback,
+                 main_loop_function,
                  keyboard_callback, mouse_callback,
                  player, enemy_list, mob_list, obstacle_list, heal_place_list,
                  projectile_list, aoe_list):
@@ -31,7 +31,7 @@ class Renderer:
         self.window = glutCreateWindow(title=b"MyGame")
         glutDisplayFunc(self.render)
         glutPostRedisplay()
-        glutIdleFunc(pre_render_callback)
+        glutIdleFunc(main_loop_function)
         glutKeyboardFunc(keyboard_callback)
         glutMouseFunc(mouse_callback)
 
@@ -43,21 +43,17 @@ class Renderer:
         self.projectile_list = projectile_list
         self.aoe_list = aoe_list
 
-        self.pre_render_callback = pre_render_callback
-
     def start(self):
         glutMainLoop()
 
     def stop(self):
-        glutLeaveMainLoop
+        glutLeaveMainLoop()
 
     def get_image(self):
-        data = b''
         data = glReadPixels(0, 0, self.WIDTH, self.HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, outputType=None)
         return data
 
     def render(self):
-        # self.pre_render_callback()
         glClearColor(0.2, 0.2, 0.2, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glViewport(0, 0, self.WIDTH, self.HEIGHT)

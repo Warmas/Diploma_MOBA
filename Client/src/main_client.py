@@ -14,7 +14,7 @@ import Common.src.globals as g
 
 class ClientMain:
     def __init__(self, player_id):
-        self.net_client = net.Client(self.process_message)
+        self.net_client = net.Client(self.process_message, self.stop)
         self.net_thread = None
 
         self.player_id = player_id
@@ -58,6 +58,9 @@ class ClientMain:
             self.process_incoming_messages()
         self.renderer.start()
 
+    def stop(self):
+        self.renderer.stop()
+
     def ping_server(self):
         msg_body = struct.pack("!f", time.time())
         self.net_client.send_message(MessageTypes.PingServer.value, msg_body)
@@ -73,6 +76,9 @@ class ClientMain:
 
         elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from server: ", msg.get_body_as_string())
+
+        elif msg_id == MessageTypes.CloseGame.value:
+            self.stop()
 
         elif msg_id == MessageTypes.Authentication.value:
             print("Authentication complete")
@@ -425,6 +431,9 @@ class ClientMain:
             # image = image.transpose(Image.FLIP_TOP_BOTTOM)
             # image.save("test_image.jpg", "JPEG")
             # print('Saved image to %s'% (os.path.abspath("test_image.jpg")))
+
+            # print("Close server")
+            # self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
 
     def mouse_callback(self, button, state, x, y):
         if (button == GLUT_RIGHT_BUTTON) and (state == GLUT_DOWN):

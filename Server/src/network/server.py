@@ -18,6 +18,7 @@ class Server:
         self.messages_out = TsDeque()
         self.messages_in = TsDeque()
         self.updates_out = []
+        self.should_stop = False
 
         self.process_message_callback = process_message_callback
         self.connection_lost_callback = connection_lost_callback
@@ -35,11 +36,13 @@ class Server:
         event_thread.start()
         print("Server started at: " + str(self.port) + " : " + self.address)
 
+    def stop(self):
+        self.should_stop = True
+
     def start_event_thread(self):
         self.connection_object.is_connected = True
-        should_stop = False
-        while not should_stop:
-            events = self.sel.select(timeout=None)
+        while not self.should_stop:
+            events = self.sel.select(timeout=1)
             for key, mask in events:
                 sock = key.fileobj
                 # New connection
@@ -51,7 +54,7 @@ class Server:
                         if mask & selectors.EVENT_READ:
                             self.connection_object.read_message(sock)
                     except Exception:
-                        should_stop = self.remove_client(sock, "Connection lost.")
+                        self.remove_client(sock, "Connection lost.")
 
     def accept_connection(self, sock):
         conn, addr = sock.accept()
@@ -67,10 +70,6 @@ class Server:
         self.sel.unregister(sock)
         sock.close()
         #print(traceback.format_exc())
-        if not len(self.sel.get_map()):
-            return True
-        else:
-            return False
 
     def process_all_messages(self):
         while not self.messages_in.empty():

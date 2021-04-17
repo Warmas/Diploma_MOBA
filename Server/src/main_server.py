@@ -34,6 +34,7 @@ class ServerMain:
         self.is_fps_on = True
         self.client_ready_counter = 0
         self.is_paused = False
+        self.is_shutdown = False
 
     def start(self):
         self.net_server.start()
@@ -41,8 +42,13 @@ class ServerMain:
         while self.client_ready_counter < 2:
             self.net_server.process_all_messages()
         self.net_server.message_all(MessageTypes.StartGame.value, b'1')
-        while True:
+        while not self.is_shutdown:
             self.server_loop()
+
+    def stop(self):
+        print("Shutting down!")
+        self.net_server.stop()
+        self.is_shutdown = True
 
     def process_message(self, msg):
         msg_id = msg.get_msg_id()
@@ -76,6 +82,9 @@ class ServerMain:
 
         elif msg_id == MessageTypes.ClientReady.value:
             self.client_ready_counter += 1
+
+        elif msg_id == MessageTypes.CloseGame.value:
+            self.stop()
 
         # AI training stuff
         elif msg_id == MessageTypes.PauseGame.value:

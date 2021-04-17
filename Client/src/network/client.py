@@ -9,7 +9,7 @@ from Common.src.network.message import Message
 
 
 class Client:
-    def __init__(self, process_message_callback):
+    def __init__(self, process_message_callback, connection_lost_callback):
         self.server_port = 54321
         self.server_address = "127.0.0.1"
         self.sel = selectors.DefaultSelector()
@@ -18,6 +18,7 @@ class Client:
         self.messages_in = TsDeque()
         self.exc_started = False
         self.exc_mutex = threading.Lock()
+        self.connection_lost_callback = connection_lost_callback
 
         self.process_message_callback = process_message_callback
 
@@ -53,6 +54,7 @@ class Client:
             sock.close()
             print("Closing connection due to error!", "\nInfo: ", msg)
             # print(traceback.format_exc())
+            self.connection_lost_callback()
         else:
             self.exc_mutex.release()
 

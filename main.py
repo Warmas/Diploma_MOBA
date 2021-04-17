@@ -25,8 +25,10 @@ if __name__ == '__main__':
     mytensor3 = torch.mul(mytensor, mytensor2)
     print(mytensor3)
 
-    myten1 = torch.tensor([[1, 2, 3]])
-    print(myten1)
-    print(myten1[0][0].item())
+    print("Flushing")
+    myarray = np.random.rand(4, 6, 3)
+    print(myarray)
+    myarray = np.transpose(myarray, (2, 0, 1))
+    print(myarray)
 
 

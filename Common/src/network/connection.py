@@ -16,6 +16,8 @@ class Connection:
         self.wm_mutex = threading.Lock()
         self.is_connected = False  # Probably should be mutexed too
         self.error_callback = error_callback
+        self.is_read_header_error = False
+        self.is_read_body_error = False
 
     def read_message(self, sock):
         if self.is_server:
@@ -23,20 +25,26 @@ class Connection:
         else:
             msg = Message()
         msg.header = self.read_header(sock)
-        msg.body = self.read_body(sock, msg.get_body_size())
-        self.messages_in.append(msg)
+        if not self.is_read_header_error:
+            msg.body = self.read_body(sock, msg.get_body_size())
+            if not self.is_read_body_error:
+                self.messages_in.append(msg)
+        self.is_read_header_error = False
+        self.is_read_body_error = False
 
     def read_header(self, sock):
         header_len = 8
         msg_header = b''
         try:
             msg_header = sock.recv(header_len)
+            if msg_header:
+                return msg_header
+            else:
+                self.is_read_header_error = True
+                self.error_callback(sock, "Empty message header.")
         except Exception:
+            self.is_read_header_error = True
             self.error_callback(sock, "Message header read failed.")
-        if msg_header:
-            return msg_header
-        else:
-            self.error_callback(sock, "Empty message header.")
 
     def read_body(self, sock, size):
         msg_body = b''
@@ -48,12 +56,14 @@ class Connection:
                 else:
                     msg_body += sock.recv(4096)
             # print("Bytesize of message body received: ", len(msg_body))
+            if msg_body:
+                return msg_body
+            else:
+                self.is_read_body_error = True
+                self.error_callback(sock, "Empty message body.")
         except Exception:
+            self.is_read_body_error = True
             self.error_callback(sock, "Message body read failed.")
-        if msg_body:
-            return msg_body
-        else:
-            self.error_callback(sock, "Empty message body.")
 
     def write_message(self):
         msg = self.messages_out.front()

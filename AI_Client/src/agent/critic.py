@@ -1,3 +1,4 @@
+# Deprecated
 import time
 from collections import namedtuple
 
