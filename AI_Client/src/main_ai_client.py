@@ -114,8 +114,10 @@ class AiClientMain(ClientMain):
 
     def transfer_done_callback(self):
         print("Optimization started...")
-        actor_loss_list, critic_loss_list = self.agent_trainer.optimize_models()
-        print("Actor loss: ", actor_loss_list, "\nCritic loss: ", critic_loss_list)
+        actor_loss_list, critic_loss_list, combined_loss_list = self.agent_trainer.optimize_models()
+        print("Actor loss: ", actor_loss_list,
+              "\nCritic loss: ", critic_loss_list,
+              "\nCombined loss:", combined_loss_list)
         self.cur_episode_n += 1
         if self.cur_episode_n < self.MAX_EPISODE_N:
             print("Saving models...")
@@ -129,7 +131,9 @@ class AiClientMain(ClientMain):
             self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
             self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         else:
+            print("Saving final agent...")
             self.agent.save_brain_weights("final_agent")
+            print("Saved final agent!")
             self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
 
     def optimize_done_callback(self):

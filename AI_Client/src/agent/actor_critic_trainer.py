@@ -51,6 +51,7 @@ class ActorCriticTrainer:
 
         actor_loss_list = []
         critic_loss_list = []
+        combined_loss_list = []
 
         batch_image_list = []
         batch_disc_act_list = []
@@ -74,13 +75,14 @@ class ActorCriticTrainer:
                                                                    batch_act_probs_t)
             actor_loss_list.append(actor_loss)
             critic_loss_list.append(critic_loss)
+            combined_loss_list.append(loss)
             # Clean up batch data
             batch_image_list.clear()
             batch_disc_act_list.clear()
             batch_reward_list.clear()
             batch_act_prob_list.clear()
             del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
-        return actor_loss_list, critic_loss_list
+        return actor_loss_list, critic_loss_list, combined_loss_list
 
     def optimization_step(self, image_t, disc_action, r_disc, old_act_prob):
         act_policy, v_predicted = self.actor_critic.brain(image_t)
