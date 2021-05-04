@@ -22,7 +22,7 @@ class ActorCriticTrainer:
 
         self.AGENT_N = 2
         self.MEMORY_CAPACITY = 512
-        self.BATCH_SIZE = 32
+        self.BATCH_SIZE = 16
 
         self.device = device
         self.actor_critic = actor_critic
