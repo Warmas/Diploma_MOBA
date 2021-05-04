@@ -1,5 +1,6 @@
 import time
 import struct
+import PIL.Image as Image
 
 import Client.src.network.client as net
 from Client.src.render.renderer import *
@@ -13,7 +14,7 @@ import Common.src.globals as g
 
 
 class ClientMain:
-    def __init__(self, player_id):
+    def __init__(self, player_id, is_displayed=True):
         self.net_client = net.Client(self.process_message, self.stop)
         self.net_thread = None
 
@@ -33,7 +34,8 @@ class ClientMain:
         self.start_game = False
         self.is_paused = False
 
-        self.renderer = Renderer(self.game_loop,
+        self.renderer = Renderer(is_displayed,
+                                 self.game_loop,
                                  self.keyboard_callback, self.mouse_callback,
                                  self.player,
                                  self.enemy_list,
@@ -426,11 +428,12 @@ class ClientMain:
         if key == KeyIds.Key_o.value:
             print("Making screenshot")
             data = self.renderer.get_image()
+            print(data)
             # Save picture
-            # image = Image.frombytes('RGB', (1000, 800), data.tobytes())
-            # image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            # image.save("test_image.jpg", "JPEG")
-            # print('Saved image to %s'% (os.path.abspath("test_image.jpg")))
+            image = Image.frombytes('RGB', (1000, 800), data.tobytes())
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            image.save("test_image2.jpg", "JPEG")
+            print('Saved image to %s' % (os.path.abspath("test_image.jpg")))
 
             # print("Close server")
             # self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
@@ -546,7 +549,10 @@ class ClientMain:
         for proj in self.projectile_list:
             proj.move(delta_t)
 
+        pre_render = time.time()
         self.renderer.render()
+        aft_render = time.time()
+        #print("Render time: ", aft_render - pre_render)
         """
         # Some of the the "client-sided" code
         proj_remove_list = []

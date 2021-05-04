@@ -7,6 +7,7 @@ import sys
 from collections import namedtuple
 from collections import deque
 import torch.nn.functional as nn_func
+import glm
 
 class MyClass:
     def __init__(self):
@@ -19,16 +20,15 @@ def asd(mybytes, num):
 
 
 if __name__ == '__main__':
-    mytensor = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    mytensor2 = torch.tensor([2, 1]).unsqueeze(1)
-    print(mytensor2)
-    mytensor3 = torch.mul(mytensor, mytensor2)
-    print(mytensor3)
-
-    print("Flushing")
-    myarray = np.random.rand(4, 6, 3)
-    print(myarray)
-    myarray = np.transpose(myarray, (2, 0, 1))
-    print(myarray)
-
-
+    asd1 = np.float32(0.1)
+    asd2 = np.float32(0.2)
+    asd4 = np.float32(0.3)
+    mylist = []
+    mylist.append(asd1)
+    mylist.append(asd2)
+    mylist.append(asd4)
+    myarray = np.array(mylist, dtype=np.float32)
+    asd3 = sys.getsizeof(myarray.data)
+    print(asd3)
+    print(myarray.itemsize)
+    print(glm.sizeof(glm.vec2))

@@ -16,47 +16,38 @@ from AI_Client.src.agent.env_globals import *
 
 
 class AiClientMain(ClientMain):
-    def __init__(self, player_id, is_training):
-        super(AiClientMain, self).__init__(player_id)
+    def __init__(self, player_id, is_training, is_displayed):
+        super(AiClientMain, self).__init__(player_id, is_displayed)
         self.agent_env = AgentEnv(self.player, self.enemy_list,
                                   self.mouse_callback, self.cast_1, self.cast_2, self.cast_3, self.cast_4)
         self.is_training = is_training
         self.MAX_EPISODE_N = 50
         self.CHECKPOINT_EP_N = 10
         self.cur_episode_n = 1
-        agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
-        #critic_weight_path_root = "AI_Client/neural_nets/weights/critic/"
-        self.agent_weight_path = agent_weight_path_root + "last_agent_weight.pth"
-        #self.critic_weight_path = critic_weight_path_root + "last_critic_weight.pth"
         self.is_new_train = True
         self.device = None
-        self.agent = None
-        #self.critic = None
         self.agent_trainer = None
+        agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
+        self.agent_weight_path = agent_weight_path_root + "last_agent_weight.pth"
+        # critic_weight_path_root = "AI_Client/neural_nets/weights/critic/"
+        # self.critic_weight_path = critic_weight_path_root + "last_critic_weight.pth"
+        if torch.cuda.is_available():
+            print("Using cuda")
+            self.device = "cuda"
+        else:
+            print("Using cpu")
+            self.device = "cpu"
+        self.agent = PpoActorCritic(self.device)
+        # self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
+        # self.critic = None
         if not is_training:
-            if torch.cuda.is_available():
-                print("Using cuda")
-                self.device = "cuda"
-            else:
-                print("Using cpu")
-                self.device = "cpu"
-            #self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-            self.agent = PpoActorCritic(self.device)
             self.agent.load_brain_weights(self.agent_weight_path)
         else:
-            if torch.cuda.is_available():
-                print("Using cuda")
-                self.device = "cuda"
-            else:
-                print("Using cpu")
-                self.device = "cpu"
-            #self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-            #self.critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-            self.agent = PpoActorCritic(self.device)
+            # self.critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
             if not self.is_new_train:
                 self.agent.load_brain_weights(self.agent_weight_path)
-                #self.critic.load_brain_weights(self.critic_weight_path)
-            #self.agent_trainer = Trainer(self.device, self.agent, self.critic)
+                # self.critic.load_brain_weights(self.critic_weight_path)
+            # self.agent_trainer = Trainer(self.device, self.agent, self.critic)
             self.agent_trainer = ActorCriticTrainer(self.device, self.agent)
         self.steps_done = 0
         self.agent_frame_delay = 0.15
@@ -161,6 +152,8 @@ class AiClientMain(ClientMain):
             enemy.update_front()
         for mob in self.mob_list:
             mob.update_front()
+        aft_front_update = time.time()
+        print("Read + update front: ", aft_front_update - cur_frame)
 
         for obs in self.obstacle_list:
             c_entity_c_static(self.player, obs)
@@ -176,14 +169,18 @@ class AiClientMain(ClientMain):
             mob.move(delta_t)
         for proj in self.projectile_list:
             proj.move(delta_t)
+        aft_move = time.time()
+        print("Moving time: ", aft_move - aft_front_update)
 
         self.renderer.render()
+        aft_render = time.time()
+        print("Render: ", aft_render - aft_move)
 
         # Observe frames with frame delay so we use less memory
         if cur_frame - self.agent_frame_time > self.agent_frame_delay:
             self.agent_frame_time = cur_frame
             image = self.renderer.get_image()
-            # Rearrange dimensions because the convolutional layer requires color channel matrixes not RGB matrix
+            # Rearrange dimensions because the convolutional layer requires color channel matrices not RGB matrix
             image = np.transpose(image, (2, 1, 0))
             image_flatten = image.flatten()
             state = State(image_flatten)
@@ -201,8 +198,12 @@ class AiClientMain(ClientMain):
                 if done:
                     self.net_client.send_message(MessageTypes.PauseGame.value, b'1')
                     self.pause_loop()
+        aft_ai = time.time()
+        print("AI time: ", aft_ai - aft_render)
 
 
-def start_ai_client(client_id="AI_Ben_pycharm", is_training=False):
-    client = AiClientMain(client_id, is_training)
+def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True):
+    if not is_displayed:
+        print("Not being displayed")
+    client = AiClientMain(client_id, is_training, is_displayed)
     client.start()
