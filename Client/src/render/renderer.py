@@ -51,97 +51,103 @@ class Renderer:
             self.fbo = glGenFramebuffers(1)
             glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
-        vs_path = "Client/src/render/shaders/vertex_shader.vs"
-        fs_path = "Client/src/render/shaders/fragment_shader.fs"
-        gs_path = None
-        self.shader = Shader(vs_path, fs_path)
-        self.shader.use()
-        view = glm.mat4(1.0)
-        self.shader.set_mat4("view", view)
-        projection = glm.mat4(1.0)
-        projection = glm.orthoRH_NO(0.0, float(self.SCR_WIDTH), float(self.SCR_HEIGHT), 0.0, -1.0, 1.0)
-        self.shader.set_mat4("projection", projection)
-
         self.player = player
         self.enemy_list = enemy_list
         self.mob_list = mob_list
-        self.obstacle_list = obstacle_list
+        self.obstacle_list = obstacle_list#
         self.heal_place_list = heal_place_list
         self.projectile_list = projectile_list
         self.aoe_list = aoe_list
 
-        player_vertices = self.create_circle(radius=player.radius, side_num=10)
-        self.player_vertex_n = len(player_vertices)
-        self.player_vao = glGenVertexArrays(1)
-        self.player_vbo = glGenBuffers(1)
-        glBindVertexArray(self.player_vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.player_vbo)
-        glBufferData(GL_ARRAY_BUFFER, player_vertices.itemsize * len(player_vertices), player_vertices, GL_STATIC_DRAW)
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, player_vertices.itemsize * 2, ctypes.c_void_p(0))
+        # Shader setup for player
+        # vs_path = "Client/src/render/shaders/vertex_shader.vs"
+        # fs_path = "Client/src/render/shaders/fragment_shader.fs"
+        # gs_path = None
+        # self.shader = Shader(vs_path, fs_path)
+        # self.shader.use()
+        # view = glm.mat4(1.0)
+        # self.shader.set_mat4("view", view)
+        # projection = glm.mat4(1.0)
+        # projection = glm.orthoRH_NO(0.0, float(self.SCR_WIDTH), float(self.SCR_HEIGHT), 0.0, -1.0, 1.0)
+        # self.shader.set_mat4("projection", projection)
 
-        mob_vertices = self.create_circle(radius=10, side_num=10)
-        self.mob_vertex_n = len(mob_vertices)
-        self.mob_vao = glGenVertexArrays(1)
-        self.mob_vbo = glGenBuffers(1)
-        glBindVertexArray(self.mob_vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.mob_vbo)
-        glBufferData(GL_ARRAY_BUFFER, mob_vertices.itemsize * len(mob_vertices), mob_vertices, GL_STATIC_DRAW)
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, mob_vertices.itemsize * 2, ctypes.c_void_p(0))
+        # Buffer setup for player drawArrays render
+        # player_vertices = self.create_circle(radius=player.radius, side_num=10)
+        # self.player_vertex_n = len(player_vertices)
+        # self.player_vao = glGenVertexArrays(1)
+        # self.player_vbo = glGenBuffers(1)
+        # glBindVertexArray(self.player_vao)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.player_vbo)
+        # glBufferData(GL_ARRAY_BUFFER, player_vertices.itemsize * len(player_vertices),
+        # player_vertices, GL_STATIC_DRAW)
+        # glEnableVertexAttribArray(0)
+        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, player_vertices.itemsize * 2, ctypes.c_void_p(0))
 
-        vs_path = "Client/src/render/shaders/ins_vertex_shader.vs"
-        fs_path = "Client/src/render/shaders/fragment_shader.fs"
-        gs_path = None
-        self.ins_shader = Shader(vs_path, fs_path)
-        self.ins_shader.use()
-        view = glm.mat4(1.0)
-        self.ins_shader.set_mat4("view", view)
-        projection = glm.orthoRH_NO(0.0, float(self.SCR_WIDTH), float(self.SCR_HEIGHT), 0.0, -1.0, 1.0)
-        self.ins_shader.set_mat4("projection", projection)
-        self.ins_vbo = glGenBuffers(1)
-        self.ins_vao = glGenVertexArrays(1)
-        glBindVertexArray(self.ins_vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.mob_vbo)
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, mob_vertices.itemsize * 2, ctypes.c_void_p(0))
-        vec2_size = glm.sizeof(glm.vec2)
-        glBindBuffer(GL_ARRAY_BUFFER, self.ins_vbo)
-        glEnableVertexAttribArray(1)
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, vec2_size, ctypes.c_void_p(0))
-        glVertexAttribDivisor(1, 1)
+        # Buffer setup for mob drawArrays render
+        # mob_vertices = self.create_circle(radius=10, side_num=10)
+        # self.mo# b_vertex_n = len(mob_vertices)
+        # self.mob_vao = glGenVertexArrays(1)
+        # self.mob_vbo = glGenBuffers(1)
+        # glBindVertexArray(self.mob_vao)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.mob_vbo)
+        # glBufferData(GL_ARRAY_BUFFER, mob_vertices.itemsize * len(mob_vertices), mob_vertices, GL_STATIC_DRAW)
+        # glEnableVertexAttribArray(0)
+        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, mob_vertices.itemsize * 2, ctypes.c_void_p(0))
 
-        r_part_vertices = self.create_rect_part(width=30, height=6)
-        self.r_part_vertex_n = len(r_part_vertices)
-        self.r_part_vbo = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.r_part_vbo)
-        glBufferData(GL_ARRAY_BUFFER, r_part_vertices.itemsize * len(r_part_vertices), r_part_vertices, GL_STATIC_DRAW)
-        vs_path = "Client/src/render/shaders/rect_part_ins.vs"
-        fs_path = "Client/src/render/shaders/fragment_shader.fs"
-        gs_path = None
-        self.r_part_ins_shader = Shader(vs_path, fs_path)
-        self.r_part_ins_shader.use()
-        projection = glm.orthoRH_NO(0.0, float(self.SCR_WIDTH), float(self.SCR_HEIGHT), 0.0, -1.0, 1.0)
-        self.r_part_ins_shader.set_mat4("projection", projection)
-        self.r_part_ins_vbo = glGenBuffers(1)
-        self.r_part_ins_vao = glGenVertexArrays(1)
-        glBindVertexArray(self.r_part_ins_vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.r_part_vbo)
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, r_part_vertices.itemsize * 3, ctypes.c_void_p(0))
-        glEnableVertexAttribArray(1)
-        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, r_part_vertices.itemsize * 3,
-                              ctypes.c_void_p(r_part_vertices.itemsize * 2))
-        vec2_size = glm.sizeof(glm.vec2)
-        ins_stride = vec2_size + vec2_size / 2
-        glBindBuffer(GL_ARRAY_BUFFER, self.ins_vbo)
-        glEnableVertexAttribArray(2)
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, vec2_size, ctypes.c_void_p(0))
-        glVertexAttribDivisor(2, 1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.r_part_ins_vbo)
-        glEnableVertexAttribArray(3)
-        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, glm.sizeof(glm.float32), ctypes.c_void_p(0))
-        glVertexAttribDivisor(3, 1)
+        # Instancing setup
+        # vs_path = "Client/src/render/shaders/ins_vertex_shader.vs"
+        # fs_path = "Client/src/render/shaders/fragment_shader.fs"
+        # gs_path = None
+        # self.ins_shader = Shader(vs_path, fs_path)
+        # self.ins_shader.use()
+        # view = glm.mat4(1.0)
+        # self.ins_shader.set_mat4("view", view)
+        # projection = glm.orthoRH_NO(0.0, float(self.SCR_WIDTH), float(self.SCR_HEIGHT), 0.0, -1.0, 1.0)
+        # self.ins_shader.set_mat4("projection", projection)
+        # self.ins_vbo = glGenBuffers(1)
+        # self.ins_vao = glGenVertexArrays(1)
+        # glBindVertexArray(self.ins_vao)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.mob_vbo)
+        # glEnableVertexAttribArray(0)
+        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, mob_vertices.itemsize * 2, ctypes.c_void_p(0))
+        # vec2_size = glm.sizeof(glm.vec2)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.ins_vbo)
+        # glEnableVertexAttribArray(1)
+        # glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, vec2_size, ctypes.c_void_p(0))
+        # glVertexAttribDivisor(1, 1)
+
+        # Instancing rectangle-part setup
+        # r_part_vertices = self.create_rect_part(width=30, height=6)
+        # self.r_part_vertex_n = len(r_part_vertices)
+        # self.r_part_vbo = glGenBuffers(1)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.r_part_vbo)
+        # glBufferData(GL_ARRAY_BUFFER, r_part_vertices.itemsize * len(r_part_vertices),
+        # r_part_vertices, GL_STATIC_DRAW)
+        # vs_path = "Client/src/render/shaders/rect_part_ins.vs"
+        # fs_path = "Client/src/render/shaders/fragment_shader.fs"
+        # gs_path = None
+        # self.r_part_ins_shader = Shader(vs_path, fs_path)
+        # self.r_part_ins_shader.use()
+        # projection = glm.orthoRH_NO(0.0, float(self.SCR_WIDTH), float(self.SCR_HEIGHT), 0.0, -1.0, 1.0)
+        # self.r_part_ins_shader.set_mat4("projection", projection)
+        # self.r_part_ins_vbo = glGenBuffers(1)
+        # self.r_part_ins_vao = glGenVertexArrays(1)
+        # glBindVertexArray(self.r_part_ins_vao)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.r_part_vbo)
+        # glEnableVertexAttribArray(0)
+        # glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, r_part_vertices.itemsize * 3, ctypes.c_void_p(0))
+        # glEnableVertexAttribArray(1)
+        # glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, r_part_vertices.itemsize * 3,
+        #                       ctypes.c_void_p(r_part_vertices.itemsize * 2))
+        # vec2_size = glm.sizeof(glm.vec2)#
+        # glBindBuffer(GL_ARRAY_BUFFER, self.ins_vbo)
+        # glEnableVertexAttribArray(2)
+        # glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, vec2_size, ctypes.c_void_p(0))
+        # glVertexAttribDivisor(2, 1)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.r_part_ins_vbo)
+        # glEnableVertexAttribArray(3)
+        # glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, glm.sizeof(glm.float32), ctypes.c_void_p(0))
+        # glVertexAttribDivisor(3, 1)
 
     def start(self):
         if self.is_displayed:
@@ -175,9 +181,9 @@ class Renderer:
             self.draw_obstacle(obs)
         for h_p in self.heal_place_list:
             self.draw_healplace(h_p)
-        #for mob in self.mob_list:
-        #    self.draw_mob(mob)
-        self.draw_mobs()
+        for mob in self.mob_list:
+            self.draw_mob(mob)
+        # self.draw_mobs()
         self.draw_player()
         for enemy in self.enemy_list:
             self.draw_enemy(enemy)
@@ -186,52 +192,20 @@ class Renderer:
         if self.is_displayed:
             glutSwapBuffers()
 
-    def draw_mobs(self):
-        self.ins_shader.use()
-        self.ins_shader.set_vec3("color", glm.vec3(0.0, 0.0, 1.0))
-        mob_offsets = []
-        mob_hp_perc_list = []
-        for mob in self.mob_list:
-            offset = glm.vec2(mob.position[0], mob.position[1])
-            mob_offsets.append(offset)
-            mob_hp_perc_list.append(mob.health / mob.max_health)
-        mob_offsets = np.array(mob_offsets)
-        mob_hp_perc_list = np.array(mob_hp_perc_list)
-        glBindBuffer(GL_ARRAY_BUFFER, self.ins_vbo)
-        glBufferData(GL_ARRAY_BUFFER, len(mob_offsets) * glm.sizeof(glm.vec2), mob_offsets, GL_STATIC_DRAW)
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
-        glBindVertexArray(self.ins_vao)
-        glDrawArraysInstanced(GL_POLYGON, 0, self.mob_vertex_n, len(mob_offsets))
-        glUseProgram(0)
-
-        #self.r_part_ins_shader.use()
-        #self.r_part_ins_shader.set_vec3("color", glm.vec3(1.0, 0.0, 0.0))
-        #self.r_part_ins_shader.set_float("width", glm.float32(30.0))
-        #glBindBuffer(GL_ARRAY_BUFFER, self.r_part_ins_vbo)
-        #glBufferData(GL_ARRAY_BUFFER, len(mob_hp_perc_list) * glm.sizeof(glm.float32), mob_hp_perc_list, GL_STATIC_DRAW)
-        #glBindBuffer(GL_ARRAY_BUFFER, 0)
-        #glBindVertexArray(self.r_part_ins_vao)
-        #glDrawArraysInstanced(GL_QUADS, 0, self.r_part_vertex_n, len(mob_offsets))
-        #glUseProgram(0)
-
-        for mob in self.mob_list:
-            self.draw_hp_bar_enemy(mob)
-            #self.draw_hp_bar_frame(mob.position)
-
-
     def draw_player(self):
         pos = self.player.position
         radius = self.player.radius
         glColor3f(0.0, 1.0, 0.0)
-        #self.draw_circle(pos, radius, side_num=8)
+        self.draw_circle(pos, radius, side_num=8)
 
-        self.shader.use()
-        offset = glm.vec2(self.player.position[0], self.player.position[1])
-        self.shader.set_vec2("offset", offset)
-        self.shader.set_vec3("color", glm.vec3(0.0, 1.0, 0.0))
-        glBindVertexArray(self.player_vao)
-        glDrawArrays(GL_POLYGON, 0, self.player_vertex_n)
-        glUseProgram(0)
+        # Rendering with drawArrays
+        # self.shader.use()
+        # offset = glm.vec2(self.player.position[0], self.player.position[1])
+        # self.shader.set_vec2("offset", offset)
+        # self.shader.set_vec3("color", glm.vec3(0.0, 1.0, 0.0))
+        # glBindVertexArray(self.player_vao)
+        # glDrawArrays(GL_POLYGON, 0, self.player_vertex_n)
+        # glUseProgram(0)
 
         # Drawing the direction marker
         tri_base_x = pos[0] + self.player.front[0] * radius
@@ -288,15 +262,51 @@ class Renderer:
         glColor3f(0.0, 0.0, 1.0)
         self.draw_circle(pos, radius, side_num=10)
 
-        #self.shader.use()
-        #offset = glm.vec2(mob.position[0], mob.position[1])
-        #self.shader.set_vec2("offset", offset)
-        #self.shader.set_vec3("color", glm.vec3(0.0, 0.0, 1.0))
-        #glBindVertexArray(self.mob_vao)
-        #glDrawArrays(GL_POLYGON, 0, self.mob_vertex_n)
-        #glUseProgram(0)
+        # Non-instanced rendering:
+        # self.shader.use()
+        # offset = glm.vec2(mob.position[0], mob.position[1])
+        # self.shader.set_vec2("offset", offset)
+        # self.shader.set_vec3("color", glm.vec3(0.0, 0.0, 1.0))
+        # glBindVertexArray(self.mob_vao)
+        # glDrawArrays(GL_POLYGON, 0, self.mob_vertex_n)
+        # glUseProgram(0)
 
-        #self.draw_hp_bar_enemy(mob)
+        self.draw_hp_bar_enemy(mob)
+
+    # Instanced rendering
+    # def draw_mobs(self):
+    #     self.ins_shader.use()
+    #     self.ins_shader.set_vec3("color", glm.vec3(0.0, 0.0, 1.0))
+    #     mob_offsets = []
+    #     mob_hp_perc_list = []
+    #     for mob in self.mob_list:
+    #         offset = glm.vec2(mob.position[0], mob.position[1])
+    #         mob_offsets.append(offset)
+    #         mob_hp_perc_list.append(mob.health / mob.max_health)
+    #     mob_offsets = np.array(mob_offsets)
+    #     mob_hp_perc_list = np.array(mob_hp_perc_list)
+    #     glBindBuffer(GL_ARRAY_BUFFER, self.ins_vbo)
+    #     glBufferData(GL_ARRAY_BUFFER, len(mob_offsets) * glm.sizeof(glm.vec2), mob_offsets, GL_STATIC_DRAW)
+    #     glBindBuffer(GL_ARRAY_BUFFER, 0)
+    #     glBindVertexArray(self.ins_vao)
+    #     glDrawArraysInstanced(GL_POLYGON, 0, self.mob_vertex_n, len(mob_offsets))
+    #     glUseProgram(0)
+
+    #     #
+    #     # self.r_part_ins_shader.use()
+    #     # self.r_part_ins_shader.set_vec3("color", glm.vec3(1.0, 0.0, 0.0))
+    #     # self.r_part_ins_shader.set_float("width", glm.float32(30.0))
+    #     # glBindBuffer(GL_ARRAY_BUFFER, self.r_part_ins_vbo)
+    #     # glBufferData(GL_ARRAY_BUFFER, len(mob_hp_perc_list) * glm.sizeof(glm.float32),
+    #     #              mob_hp_perc_list, GL_STATIC_DRAW)
+    #     # glBindBuffer(GL_ARRAY_BUFFER, 0)
+    #     # glBindVertexArray(self.r_part_ins_vao)
+    #     # glDrawArraysInstanced(GL_QUADS, 0, self.r_part_vertex_n, len(mob_offsets))
+    #     # glUseProgram(0)
+
+    #     for mob in self.mob_list:
+    #         self.draw_hp_bar_enemy(mob)
+    #         # self.draw_hp_bar_frame(mob.position)
 
     def draw_hp_bar(self):
         pos = self.player.position + np.array([0, -20])
@@ -430,8 +440,9 @@ class Renderer:
             vertices.append(np.sin(angle) * radius)
         return np.array(vertices, dtype=np.float32)
 
+    @staticmethod
     def create_rect_part(self, width, height):
-        vertices = []
+        vertices = list()
         vertices.append(-width / 2)
         vertices.append(-height / 2)
         vertices.append(0.0)

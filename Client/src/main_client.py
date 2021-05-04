@@ -549,10 +549,10 @@ class ClientMain:
         for proj in self.projectile_list:
             proj.move(delta_t)
 
-        pre_render = time.time()
+        # pre_render = time.time()
         self.renderer.render()
-        aft_render = time.time()
-        #print("Render time: ", aft_render - pre_render)
+        # aft_render = time.time()
+        # print("Render time: ", aft_render - pre_render)
         """
         # Some of the the "client-sided" code
         proj_remove_list = []

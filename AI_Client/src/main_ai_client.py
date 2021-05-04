@@ -152,8 +152,8 @@ class AiClientMain(ClientMain):
             enemy.update_front()
         for mob in self.mob_list:
             mob.update_front()
-        aft_front_update = time.time()
-        print("Read + update front: ", aft_front_update - cur_frame)
+        # aft_front_update = time.time()
+        # print("Read + update front: ", aft_front_update - cur_frame)
 
         for obs in self.obstacle_list:
             c_entity_c_static(self.player, obs)
@@ -169,12 +169,12 @@ class AiClientMain(ClientMain):
             mob.move(delta_t)
         for proj in self.projectile_list:
             proj.move(delta_t)
-        aft_move = time.time()
-        print("Moving time: ", aft_move - aft_front_update)
+        # aft_move = time.time()
+        # print("Moving time: ", aft_move - aft_front_update)
 
         self.renderer.render()
-        aft_render = time.time()
-        print("Render: ", aft_render - aft_move)
+        # aft_render = time.time()
+        # print("Render: ", aft_render - aft_move)
 
         # Observe frames with frame delay so we use less memory
         if cur_frame - self.agent_frame_time > self.agent_frame_delay:
@@ -198,8 +198,8 @@ class AiClientMain(ClientMain):
                 if done:
                     self.net_client.send_message(MessageTypes.PauseGame.value, b'1')
                     self.pause_loop()
-        aft_ai = time.time()
-        print("AI time: ", aft_ai - aft_render)
+        # aft_ai = time.time()
+        # print("AI time: ", aft_ai - aft_render)
 
 
 def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True):
