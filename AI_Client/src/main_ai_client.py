@@ -11,7 +11,7 @@ from AI_Client.src.agent.agent import Agent
 from AI_Client.src.agent.critic import Critic
 from AI_Client.src.agent.trainer import Trainer
 from AI_Client.src.agent.ppo_agent import PpoActorCritic
-from AI_Client.src.agent.actor_critic_trainer import ActorCriticTrainer
+from AI_Client.src.agent.ppo_trainer import PpoTrainer
 from AI_Client.src.agent.env_globals import *
 
 
@@ -29,8 +29,6 @@ class AiClientMain(ClientMain):
         self.agent_trainer = None
         agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
         self.agent_weight_path = agent_weight_path_root + "last_agent_weight.pth"
-        # critic_weight_path_root = "AI_Client/neural_nets/weights/critic/"
-        # self.critic_weight_path = critic_weight_path_root + "last_critic_weight.pth"
         if torch.cuda.is_available():
             print("Using cuda")
             self.device = "cuda"
@@ -38,17 +36,12 @@ class AiClientMain(ClientMain):
             print("Using cpu")
             self.device = "cpu"
         self.agent = PpoActorCritic(self.device)
-        # self.agent = Agent(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
-        # self.critic = None
         if not is_training:
             self.agent.load_brain_weights(self.agent_weight_path)
         else:
-            # self.critic = Critic(self.device, SCREEN_HEIGHT, SCREEN_WIDTH, DISC_ACTION_N, CONT_ACTION_N)
             if not self.is_new_train:
                 self.agent.load_brain_weights(self.agent_weight_path)
-                # self.critic.load_brain_weights(self.critic_weight_path)
-            # self.agent_trainer = Trainer(self.device, self.agent, self.critic)
-            self.agent_trainer = ActorCriticTrainer(self.device, self.agent)
+            self.agent_trainer = PpoTrainer(self.device, self.agent)
         self.steps_done = 0
         self.agent_frame_delay = 0.15
         self.agent_frame_time = 0
@@ -105,10 +98,16 @@ class AiClientMain(ClientMain):
 
     def transfer_done_callback(self):
         print("Optimization started...")
-        actor_loss_list, critic_loss_list, combined_loss_list = self.agent_trainer.optimize_models()
+        actor_loss_list, critic_loss_list, combined_loss_list, \
+        disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list = \
+            self.agent_trainer.optimize_models()
         print("Actor loss: ", actor_loss_list,
               "\nCritic loss: ", critic_loss_list,
-              "\nCombined loss:", combined_loss_list)
+              "\nCombined loss:", combined_loss_list,
+              "\nDiscrete action loss:", disc_act_loss_list,
+              "\nContinuous action loss:", cont_act_loss_list,
+              "\nDiscrete entropy loss:", disc_entropy_loss_list,
+              "\nContinuous entropy loss:", cont_entropy_loss_list)
         self.cur_episode_n += 1
         if self.cur_episode_n < self.MAX_EPISODE_N:
             print("Saving models...")

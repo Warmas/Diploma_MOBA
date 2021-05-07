@@ -3,9 +3,9 @@ import Common.src.globals as g
 
 
 class Entity:
-    def __init__(self, radius=15, speed=0):
+    def __init__(self, radius=15, speed=0, max_health=100):
         self.radius = radius
-        self.max_health = 100
+        self.max_health = max_health
         self.health = self.max_health
         self.position = np.array([0.0, 0.0])
         self.move_to = np.array([0.0, 0.0])
