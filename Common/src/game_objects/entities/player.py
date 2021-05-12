@@ -4,7 +4,7 @@ from Common.src.game_objects.entities.entity import Entity
 class Player(Entity):
     def __init__(self, player_id):
         self.player_id = player_id
-        super(Player, self).__init__(speed=100, max_health=1)
+        super(Player, self).__init__(speed=100, max_health=100)
         self.max_level = 3
         self.level = 1
         self.experience = 0  # Xp to lvl up 100 + 20 * lvl
