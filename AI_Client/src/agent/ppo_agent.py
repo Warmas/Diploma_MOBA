@@ -28,13 +28,13 @@ class PpoAgentCriticNn(nn.Module):
 
         self.conv_block = nn.Sequential(
             self.conv1,
-            nn.BatchNorm2d(16),
+            #nn.BatchNorm2d(16),  #??? Batchnorm always decreases entropy to 0
             nn.ReLU(),
             self.conv2,
-            nn.BatchNorm2d(32),
+            #nn.BatchNorm2d(32),
             nn.ReLU(),
             self.conv3,
-            nn.BatchNorm2d(32),
+            #nn.BatchNorm2d(32), #instancenorm,layernorm,groupnorm
             nn.ReLU(),
             nn.Flatten()
         )

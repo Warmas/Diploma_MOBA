@@ -61,3 +61,5 @@ if __name__ == '__main__':
     ent1 = cath1.entropy()
     loss = 0.6 * -ent1
     print("Loss: ", loss)
+    print("0.1 + 0.2", .1 + .2)
+    print(.1 + .2 == .3)

@@ -18,8 +18,8 @@ class PpoTrainer:
         self.LR_ACTOR = 1e-3  # Unused with combined loss
         self.LR_CRITIC = 3e-3  # Unused with combined loss
         self.CRITIC_DISC_FACTOR = 0.5
-        self.DISC_ENTROPY_FACTOR = 0.1
-        self.CONT_ENTROPY_FACTOR = 0.01
+        self.DISC_ENTROPY_FACTOR = 0.001
+        self.CONT_ENTROPY_FACTOR = 0.001
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2
@@ -103,16 +103,17 @@ class PpoTrainer:
         actor_loss, disc_act_loss, cont_act_loss, disc_entropy_loss, cont_entropy_loss = \
             self.calc_actor_loss(r_disc, v_predicted, image_t, disc_action, old_act_prob)
         critic_loss = self.calc_critic_loss(r_disc, v_predicted)
-        #loss = actor_loss + self.CRITIC_DISC_FACTOR * critic_loss
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        disc_policy, cont_means, cont_vars, critic_value = self.actor_critic.brain(image_t)
-        disc_dist = Categorical(disc_policy)
-        disc_act_entropy = disc_dist.entropy().unsqueeze(dim=1)
-        disc_entropy_loss = self.DISC_ENTROPY_FACTOR * disc_act_entropy
-        disc_entropy_loss = disc_entropy_loss.mean()
-        loss = - disc_entropy_loss
-        #disc_policy, cont_means, cont_vars, critic_value = self.actor_critic.brain(image_t)
-        #loss = nn_func.mse_loss(disc_policy, torch.tensor([0, 0, 1, 0, 0, 0], dtype=torch.float).to(self.device))
+        loss = actor_loss + self.CRITIC_DISC_FACTOR * critic_loss
+
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # disc_policy, cont_means, cont_vars, critic_value = self.actor_critic.brain(image_t)
+        # disc_dist = Categorical(disc_policy)
+        # disc_act_entropy = disc_dist.entropy().unsqueeze(dim=1)
+        # disc_entropy_loss = self.DISC_ENTROPY_FACTOR * disc_act_entropy
+        # disc_entropy_loss = disc_entropy_loss.mean()
+        # loss = - disc_entropy_loss
+        # disc_policy, cont_means, cont_vars, critic_value = self.actor_critic.brain(image_t)
+        # loss = nn_func.mse_loss(disc_policy, torch.tensor([0, 0, 1, 0, 0, 0], dtype=torch.float).to(self.device))
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         self.optimizer.zero_grad()
