@@ -32,34 +32,7 @@ class Net(nn.Module):
 
 
 if __name__ == '__main__':
-    # ten1 = torch.tensor([0.25, 0.25, 0.25, 0.25])
-    # ten1 = torch.tensor([0.3, 0.3, 0.2, 0.2])
-    net = Net()
-    optimizer = optim.Adam(net.parameters(), 1e-3)
-    with torch.no_grad():
-        net.linear[0].weight[0, 0] = 0.3
-        net.linear[0].weight[1, 0] = 0.3
-        net.linear[0].weight[2, 0] = 0.2
-        net.linear[0].weight[3, 0] = 0.2
-        net.linear[0].bias[0] = 0
-        net.linear[0].bias[1] = 0
-        net.linear[0].bias[2] = 0
-        net.linear[0].bias[3] = 0
-        print(net.linear[0].weight, net.linear[0].bias)
-    output = net(torch.tensor([1.0], dtype=torch.float))
-    print("Output: ", output)
-    cath1 = Categorical(output)
-    ent1 = cath1.entropy()
-    loss = 0.6 * -ent1
-    print("Loss: ", loss)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    output = net(torch.tensor([1.0], dtype=torch.float))
-    print("Output: ", output)
-    cath1 = Categorical(output)
-    ent1 = cath1.entropy()
-    loss = 0.6 * -ent1
-    print("Loss: ", loss)
-    print("0.1 + 0.2", .1 + .2)
-    print(.1 + .2 == .3)
+    num = 1.00110210
+    float_data = struct.pack("!f", num)
+    print(float_data)
+    print(len(float_data))

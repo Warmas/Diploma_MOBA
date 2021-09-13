@@ -82,9 +82,16 @@ class Server:
         msg.set_message(msg_id, msg_body, is_body_string)
         self.connection_object.send_message(sock, msg)
 
+    def send_complete_message(self, sock, msg):
+        self.connection_object.send_message(sock, msg)
+
     def message_all(self, msg_id, msg_body, is_body_string=False):
         for sock in self.connection_list:
             self.send_message(sock, msg_id, msg_body, is_body_string)
+
+    def complete_message_all(self, msg):
+        for sock in self.connection_list:
+            self.send_complete_message(sock, msg)
 
     def message_all_but_one(self, ignore, msg_id, msg_body, is_body_string=False):
         for sock in self.connection_list:

@@ -72,5 +72,11 @@ class Client:
         else:
             print("Connection is closed, message send failed!")
 
+    def send_complete_message(self, msg):
+        if self.connection_object.is_connected:
+            self.connection_object.send_message(self.sock, msg)
+        else:
+            print("Connection is closed, message send failed!")
+
     def get_connection_state(self):
         return self.connection_object.is_connected

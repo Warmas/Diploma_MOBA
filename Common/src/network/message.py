@@ -97,6 +97,22 @@ class Message:
         string = string_data.decode("utf-8")
         return string
 
+    def push_bytes(self, bytes_to_push):
+        self.body += bytes_to_push
+        body_size_b = struct.pack("!i", len(self.body))
+        self.header = self.header[:4] + body_size_b
+
+    def push_double(self, num):
+        double_data = struct.pack("!d", num)
+        self.body += double_data
+        body_size_b = struct.pack("!i", len(self.body))
+        self.header = self.header[:4] + body_size_b
+
+    def get_double(self):
+        num = struct.unpack("!d", self.body[:8])[0]
+        self.body = self.body[8:]
+        return num
+
 
 class OwnedMessage(Message):
     def __init__(self, socket, header=b'00000000', body=b''):

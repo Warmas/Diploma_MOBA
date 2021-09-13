@@ -7,7 +7,7 @@ import torch.nn.functional as nn_func
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 from AI_Client.src.agent.training_memory import *
-from torch.distributions import Categorical
+
 
 class PpoTrainer:
     def __init__(self, device, actor_critic):

@@ -2,10 +2,11 @@ import time
 import struct
 import PIL.Image as Image
 
-import Client.src.network.client as net
+import Client.src.network.net_client as net
 from Client.src.render.renderer import *
 from Common.src.casting import *
 from Common.src.network.message import MessageTypes
+from Common.src.network.message import Message
 from Common.src.game_objects.entities.player import Player
 from Common.src.game_objects.entities.mob import Mob
 from Common.src.game_objects.statics.obstacle import *
@@ -64,7 +65,7 @@ class ClientMain:
         self.renderer.stop()
 
     def ping_server(self):
-        msg_body = struct.pack("!f", time.time())
+        msg_body = struct.pack("!d", time.time())
         self.net_client.send_message(MessageTypes.PingServer.value, msg_body)
 
     def process_incoming_messages(self):
@@ -73,8 +74,8 @@ class ClientMain:
     def process_message(self, msg):
         msg_id = msg.get_msg_id()
         if msg_id == MessageTypes.PingServer.value:
-            send_time = struct.unpack("!f", msg.body)[0]
-            print("Server ping: ", (time.time() - send_time))
+            send_time = struct.unpack("!d", msg.body)[0]
+            print("Server ping: ", (time.time() - send_time), " s")
 
         elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from server: ", msg.get_body_as_string())
@@ -152,14 +153,11 @@ class ClientMain:
             self.enemy_list.append(enemy)
 
         elif msg_id == MessageTypes.PlayerMoveTo.value:
-            msg_data = msg.get_body_as_string().split(';')
-            player_id = msg_data[0]
-            mt_pos = msg_data[1].split(',')
-            p_pos = msg_data[2].split(',')
-            x_mt = float(mt_pos[0])
-            y_mt = float(mt_pos[1])
-            x_p = float(p_pos[0])
-            y_p = float(p_pos[1])
+            player_id = msg.get_string()
+            x_mt = msg.get_float()
+            y_mt = msg.get_float()
+            x_p = msg.get_float()
+            y_p = msg.get_float()
             if self.player.player_id == player_id:
                 # In theory setting the position could cause jumps, but it is smooth and corrects latency error.
                 self.player.position = np.array([x_p, y_p])
@@ -171,6 +169,9 @@ class ClientMain:
                         enemy.position = np.array([x_p, y_p])
                         enemy.move_to = np.array([x_mt, y_mt])
                         enemy.new_front(enemy.move_to)
+            cur_time = time.time()
+            send_time = msg.get_double()
+            print("Player move delay: ", cur_time - send_time, " s")
 
         elif msg_id == MessageTypes.MobsMoveTo.value:
             msg_data = msg.get_body_as_string().split('\n')
@@ -442,8 +443,13 @@ class ClientMain:
         if (button == GLUT_RIGHT_BUTTON) and (state == GLUT_DOWN):
             # self.player.move_to = np.array([float(x), float(y)])
             # self.player.new_front(np.array([float(x), float(y)]))
-            msg_body = str(x) + ',' + str(y)
-            self.net_client.send_message(MessageTypes.PlayerMoveTo.value, msg_body, True)
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.PlayerMoveTo.value)
+            msg.push_float(float(x))
+            msg.push_float(float(y))
+            send_time = time.time()
+            msg.push_double(send_time)
+            self.net_client.send_complete_message(msg)
 
     def cast_1(self, x, y):
         cur_time = time.time()

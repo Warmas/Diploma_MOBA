@@ -4,8 +4,9 @@ import struct
 
 import numpy as np
 
-import Server.src.network.server as net
+import Server.src.network.net_server as net
 from Common.src.network.message import MessageTypes
+from Common.src.network.message import Message
 from Common.src.game_objects.entities.player import Player
 from Common.src.game_objects.entities.mob import Mob
 from Common.src.game_objects.statics.obstacle import *
@@ -66,16 +67,21 @@ class ServerMain:
             self.client_authentication(msg.socket, msg.get_body_as_string())
 
         elif msg_id == MessageTypes.PlayerMoveTo.value:
-            pos = msg.get_body_as_string().split(',')
             player = self.get_player_for_socket(msg.socket)
-            x = float(pos[0])
-            y = float(pos[1])
+            x = msg.get_float()
+            y = msg.get_float()
+            send_time = msg.get_double()
             player.move_to = np.array([x, y])
             player.new_front(np.array([x, y]))
-            msg_body = player.player_id + ';' + msg.get_body_as_string()
-            msg_body += ';' + str(player.position[0]) + ',' + str(player.position[1])
-            # self.net_server.message_all_but_one(msg.socket, MessageTypes.PlayerMoveTo, msg_body, True)
-            self.net_server.message_all(MessageTypes.PlayerMoveTo.value, msg_body, True)
+            new_msg = Message()
+            new_msg.set_header_by_id(MessageTypes.PlayerMoveTo.value)
+            new_msg.push_string(player.player_id)
+            new_msg.push_float(x)
+            new_msg.push_float(y)
+            new_msg.push_float(player.position[0])
+            new_msg.push_float(player.position[1])
+            new_msg.push_double(send_time)
+            self.net_server.complete_message_all(new_msg)
 
         elif msg_id == MessageTypes.CastSpell.value:
             self.cast_spell(msg.socket, msg.get_body_as_string())
@@ -283,6 +289,7 @@ class ServerMain:
     def pause_loop(self, game_over=False, loser_id=""):
         msg_body = b''
         if game_over:
+            print("Game over, \"", loser_id, "\" lost!")
             msg_body += struct.pack("!i", 2)
             msg_body += struct.pack("!i", len(loser_id))
             msg_body += loser_id.encode("utf-8")
