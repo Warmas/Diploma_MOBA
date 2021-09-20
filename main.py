@@ -11,6 +11,7 @@ import glm
 from torch.distributions import Categorical
 import torch.nn as nn
 import torch.optim as optim
+import argparse
 
 class MyClass:
     def __init__(self):
@@ -32,7 +33,6 @@ class Net(nn.Module):
 
 
 if __name__ == '__main__':
-    num = 1.00110210
-    float_data = struct.pack("!f", num)
-    print(float_data)
-    print(len(float_data))
+    asd = 1
+    asd2 = "1"
+    print(asd == asd2)

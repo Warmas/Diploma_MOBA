@@ -1,4 +1,4 @@
 @ECHO OFF
 call conda activate diploma
-python main.py AI_Ben 1
+python start_ai_client.py -i AI_Ben -t 1
 PAUSE

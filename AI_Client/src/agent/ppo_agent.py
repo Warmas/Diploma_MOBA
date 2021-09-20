@@ -120,13 +120,13 @@ class PpoActorCritic:
     def load_brain(self, name="", root_path=""):
         if not len(root_path):
             root_path = self.MODEL_ROOT
-        path = root_path + name + ".pth"
+        path = root_path + name
         self.brain = torch.load(path)
 
     def load_brain_weights(self, name, root_path=""):
         if not len(root_path):
             root_path = self.WEIGHT_ROOT
-        path = root_path + name + ".pth"
+        path = root_path + name
         self.brain.load_state_dict(torch.load(path))
         self.brain.eval()
 

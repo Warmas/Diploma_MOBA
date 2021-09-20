@@ -181,7 +181,7 @@ class Renderer:
             self.draw_obstacle(obs)
         for h_p in self.heal_place_list:
             self.draw_healplace(h_p)
-        for mob in self.mob_list:
+        for mob in self.mob_list.values():
             self.draw_mob(mob)
         # self.draw_mobs()
         self.draw_player()

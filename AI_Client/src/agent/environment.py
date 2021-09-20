@@ -5,7 +5,6 @@ from OpenGL.GLUT import *
 
 # Taken the number of states we check the discount factor and the max rewards in a state this helps to normalize the
 # discounted reward values to be between -1 and 1
-# This is somewhat of a hyperparameter
 REWARD_UNIT = 1 / 40000
 
 
@@ -37,7 +36,7 @@ class AgentEnv(gym.Env):
         if my_action.disc_action == 0:
             pass
         if my_action.disc_action == 1:
-            self.act1(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, x=mouse_x, y=mouse_y)
+            self.act1(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
         if my_action.disc_action == 2:
             self.act2(mouse_x, mouse_y)
         if my_action.disc_action == 3:

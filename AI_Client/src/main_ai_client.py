@@ -1,34 +1,31 @@
 import time
 import struct
-from PIL import Image
 
 import torch
 
 from Client.src.main_client import ClientMain, MessageTypes
 from Common.src.game_objects.collision.collision_eval import *
 from AI_Client.src.agent.environment import *
-from AI_Client.src.agent.agent import Agent
-from AI_Client.src.agent.critic import Critic
-from AI_Client.src.agent.trainer import Trainer
 from AI_Client.src.agent.ppo_agent import PpoActorCritic
 from AI_Client.src.agent.ppo_trainer import PpoTrainer
 from AI_Client.src.agent.env_globals import *
 
 
 class AiClientMain(ClientMain):
-    def __init__(self, player_id, is_training, is_displayed):
+    def __init__(self, player_id, is_training, is_displayed, is_load_weights, weight_file):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.agent_env = AgentEnv(self.player, self.enemy_list,
                                   self.mouse_callback, self.cast_1, self.cast_2, self.cast_3, self.cast_4)
-        self.is_training = is_training
         self.MAX_EPISODE_N = 50
         self.CHECKPOINT_EP_N = 10
         self.cur_episode_n = 1
-        self.is_new_train = True
+
+        self.is_training = is_training
         self.device = None
         self.agent_trainer = None
         agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
-        self.agent_weight_path = agent_weight_path_root + "last_agent_weight.pth"
+        self.agent_weight_path = agent_weight_path_root + weight_file
+
         if torch.cuda.is_available():
             print("Using cuda")
             self.device = "cuda"
@@ -36,12 +33,15 @@ class AiClientMain(ClientMain):
             print("Using cpu")
             self.device = "cpu"
         self.agent = PpoActorCritic(self.device)
-        if not is_training:
+        if not self.is_training:
             self.agent.load_brain_weights(self.agent_weight_path)
+            print("Loaded weights from path: ", self.agent_weight_path)
         else:
-            if not self.is_new_train:
+            if is_load_weights:
                 self.agent.load_brain_weights(self.agent_weight_path)
+                print("Loaded weights from path: ", self.agent_weight_path)
             self.agent_trainer = PpoTrainer(self.device, self.agent)
+
         self.steps_done = 0
         self.agent_frame_delay = 0.15
         self.agent_frame_time = 0
@@ -53,8 +53,10 @@ class AiClientMain(ClientMain):
         if game_over:
             if loser_id == self.player.player_id:
                 self.agent_trainer.memory.reward_list[-1] += self.agent_env.get_lose_reward()
+                print("You lost!")
             else:
                 self.agent_trainer.memory.reward_list[-1] += self.agent_env.get_win_reward()
+                print("You won!")
         started_transfer = False
         while not self.start_game:
             self.process_incoming_messages()
@@ -102,12 +104,12 @@ class AiClientMain(ClientMain):
         disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list = \
             self.agent_trainer.optimize_models()
         print("Actor loss: ", actor_loss_list,
-              "\nCritic loss: ", critic_loss_list,
-              "\nCombined loss:", combined_loss_list,
-              "\nDiscrete action loss:", disc_act_loss_list,
-              "\nContinuous action loss:", cont_act_loss_list,
-              "\nDiscrete entropy loss:", disc_entropy_loss_list,
-              "\nContinuous entropy loss:", cont_entropy_loss_list)
+              "\n\nCritic loss: ", critic_loss_list,
+              "\n\nCombined loss:", combined_loss_list,
+              "\n\nDiscrete action loss:", disc_act_loss_list,
+              "\n\nContinuous action loss:", cont_act_loss_list,
+              "\n\nDiscrete entropy loss:", disc_entropy_loss_list,
+              "\n\nContinuous entropy loss:", cont_entropy_loss_list)
         self.cur_episode_n += 1
         if self.cur_episode_n < self.MAX_EPISODE_N:
             print("Saving models...")
@@ -141,7 +143,7 @@ class AiClientMain(ClientMain):
             if self.counter_for_fps > 2:
                 self.counter_for_fps = 0
                 print("FPS: ", 1 / delta_t)
-                print(self.steps_done)
+                print("Steps done: ", self.steps_done)
         for heal_place in self.heal_place_list:
             if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
                 heal_place.available = True
@@ -149,7 +151,7 @@ class AiClientMain(ClientMain):
         self.player.update_front()
         for enemy in self.enemy_list:
             enemy.update_front()
-        for mob in self.mob_list:
+        for mob in self.mob_list.values():
             mob.update_front()
         # aft_front_update = time.time()
         # print("Read + update front: ", aft_front_update - cur_frame)
@@ -158,13 +160,13 @@ class AiClientMain(ClientMain):
             c_entity_c_static(self.player, obs)
             for enemy in self.enemy_list:
                 c_entity_c_static(enemy, obs)
-            for mob in self.mob_list:
+            for mob in self.mob_list.values():
                 c_entity_c_static(mob, obs)
 
         self.player.move(delta_t)
         for enemy in self.enemy_list:
             enemy.move(delta_t)
-        for mob in self.mob_list:
+        for mob in self.mob_list.values():
             mob.move(delta_t)
         for proj in self.projectile_list:
             proj.move(delta_t)
@@ -201,8 +203,9 @@ class AiClientMain(ClientMain):
         # print("AI time: ", aft_ai - aft_render)
 
 
-def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True):
+def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True,
+                    is_load_weights=True, weight_file="last_agent_weight.pth"):
     if not is_displayed:
         print("Not being displayed")
-    client = AiClientMain(client_id, is_training, is_displayed)
+    client = AiClientMain(client_id, is_training, is_displayed, is_load_weights, weight_file)
     client.start()

@@ -22,7 +22,7 @@ class ClientMain:
         self.player_id = player_id
         self.player = Player(self.player_id)
         self.enemy_list = []
-        self.mob_list = []
+        self.mob_list = {}
         self.obstacle_list = []
         self.heal_place_list = []
         self.projectile_list = []
@@ -108,7 +108,7 @@ class ClientMain:
             mob_data_list = msg_data[2].split('\n')
             for mob_data in mob_data_list[1:]:
                 mnd = mob_data.split(':')
-                mob = Mob(mnd[0])
+                mob = Mob(int(mnd[0]))
                 data_list = mnd[1].split(';')
                 position = data_list[0].split(',')
                 x_p = float(position[0])
@@ -119,7 +119,7 @@ class ClientMain:
                 y_mt = float(move_to[1])
                 mob.move_to = np.array([x_mt, y_mt])
                 mob.new_front(mob.move_to)
-                self.mob_list.append(mob)
+                self.mob_list[mob.mob_id] = mob
             obstacle_data_list = msg_data[3].split('\n')
             for obs_data in obstacle_data_list[1:]:
                 obs = CircleObstacle()
@@ -147,9 +147,9 @@ class ClientMain:
             pnp = msg.get_body_as_string().split(':')
             enemy = Player(pnp[0])
             position = pnp[1].split(',')
-            x = float(position[0])
-            y = float(position[1])
-            enemy.change_position(np.array([x, y]))
+            x_p = float(position[0])
+            y_p = float(position[1])
+            enemy.change_position(np.array([x_p, y_p]))
             self.enemy_list.append(enemy)
 
         elif msg_id == MessageTypes.PlayerMoveTo.value:
@@ -169,26 +169,22 @@ class ClientMain:
                         enemy.position = np.array([x_p, y_p])
                         enemy.move_to = np.array([x_mt, y_mt])
                         enemy.new_front(enemy.move_to)
-            cur_time = time.time()
-            send_time = msg.get_double()
-            print("Player move delay: ", cur_time - send_time, " s")
+            # cur_time = time.time()
+            # send_time = msg.get_double()
+            # print("Player move delay: ", cur_time - send_time, " s")
 
         elif msg_id == MessageTypes.MobsMoveTo.value:
-            msg_data = msg.get_body_as_string().split('\n')
-            for mob_data in msg_data[1:]:
-                d = mob_data.split(';')
-                mob_id = d[0]
-                mt_data = d[1].split(',')
-                pos_data = d[2].split(',')
-                x_mt = float(mt_data[0])
-                y_mt = float(mt_data[1])
-                x_p = float(pos_data[0])
-                y_p = float(pos_data[1])
-                for mob in self.mob_list:
-                    if mob.mob_id == mob_id:
-                        mob.position = np.array([x_p, y_p])
-                        mob.move_to = np.array([x_mt, y_mt])
-                        mob.new_front(mob.move_to)
+            num_mob_move_updates = msg.get_int()
+            for i in range(num_mob_move_updates):
+                mob_id = msg.get_int()
+                x_mt = msg.get_float()
+                y_mt = msg.get_float()
+                x_p = msg.get_float()
+                y_p = msg.get_float()
+                mob = self.mob_list[mob_id]
+                mob.position = np.array([x_p, y_p])
+                mob.move_to = np.array([x_mt, y_mt])
+                mob.update_front()
 
         elif msg_id == MessageTypes.CastSpell.value:
             msg_data = msg.get_body_as_string().split(':')
@@ -260,7 +256,7 @@ class ClientMain:
                     eff_x = float(eff_pos_data[0])
                     eff_y = float(eff_pos_data[1])
                     new_pos = np.array([eff_x, eff_y])
-                    for mob in self.mob_list:
+                    for mob in self.mob_list.values():
                         if eff_id == mob.mob_id:
                             mob.change_position(new_pos)
 
@@ -306,19 +302,16 @@ class ClientMain:
                             break
             for data in mob_data[1:]:
                 d = data.split(':')
-                mob_id = d[0]
+                mob_id = int(d[0])
                 mob_hp = int(d[1])
-                for mob in self.mob_list:
-                    if mob.mob_id == mob_id:
-                        mob.update_health(mob_hp)
-                        break
+                self.mob_list[mob_id].update_health(mob_hp)
 
         elif msg_id == MessageTypes.MobsKilled.value:
             msg_data = msg.get_body_as_string().split('\n')
             for data in msg_data[1:]:
                 d = data.split(':')
                 killer_id = d[0]
-                mob_id = d[1]
+                mob_id = int(d[1])
                 self.mob_kill(killer_id, mob_id)
 
         elif msg_id == MessageTypes.HealPlaceChange.value:
@@ -382,7 +375,7 @@ class ClientMain:
             mob_pos_y = msg.get_float()
             new_mob = Mob(mob_id)
             new_mob.change_position(np.array([mob_pos_x, mob_pos_y]))
-            self.mob_list.append(new_mob)
+            self.mob_list[new_mob.mob_id](new_mob)
 
         obs_count = msg.get_int()
         for i in range(obs_count):
@@ -439,23 +432,23 @@ class ClientMain:
             # print("Close server")
             # self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
 
-    def mouse_callback(self, button, state, x, y):
+    def mouse_callback(self, button, state, mouse_x, mouse_y):
         if (button == GLUT_RIGHT_BUTTON) and (state == GLUT_DOWN):
             # self.player.move_to = np.array([float(x), float(y)])
             # self.player.new_front(np.array([float(x), float(y)]))
             msg = Message()
             msg.set_header_by_id(MessageTypes.PlayerMoveTo.value)
-            msg.push_float(float(x))
-            msg.push_float(float(y))
-            send_time = time.time()
-            msg.push_double(send_time)
+            msg.push_float(float(mouse_x))
+            msg.push_float(float(mouse_y))
+            # send_time = time.time()
+            # msg.push_double(send_time)
             self.net_client.send_complete_message(msg)
 
-    def cast_1(self, x, y):
+    def cast_1(self, mouse_x, mouse_y):
         cur_time = time.time()
         if (cur_time - self.player.cd_1_start) > SpellCooldowns.Fireball:
             self.player.cd_1_start = cur_time
-            front = g.new_front(np.array([float(x), float(y)]), self.player.position)
+            front = g.new_front(np.array([float(mouse_x), float(mouse_y)]), self.player.position)
             # fireball = Fireball(cur_time, self.player_id, self.player.position, front)
             # self.projectile_list.append(fireball)
             msg_body = str(SpellTypes.Fireball.value)
@@ -509,10 +502,7 @@ class ClientMain:
             self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def mob_kill(self, killer_id, mob_id):
-        for mob in self.mob_list:
-            if mob.mob_id == mob_id:
-                self.mob_list.remove(mob)
-                break
+        self.mob_list.pop(mob_id)
         if killer_id == self.player.player_id:
             self.player.gain_exp(20)
             return
@@ -530,27 +520,29 @@ class ClientMain:
             if self.counter_for_fps > 2:
                 self.counter_for_fps = 0
                 print("FPS: ", 1 / delta_t)
+
         for heal_place in self.heal_place_list:
             if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
                 heal_place.available = True
         self.process_incoming_messages()
-        self.player.update_front()
-        for enemy in self.enemy_list:
-            enemy.update_front()
-        for mob in self.mob_list:
-            mob.update_front()
+        # Currently this is unnecessary as with update them with every moveto
+        # self.player.update_front()
+        # for enemy in self.enemy_list:
+        #     enemy.update_front()
+        # for mob in self.mob_list.values():
+        #    mob.update_front()
 
         for obs in self.obstacle_list:
             c_entity_c_static(self.player, obs)
             for enemy in self.enemy_list:
                 c_entity_c_static(enemy, obs)
-            for mob in self.mob_list:
+            for mob in self.mob_list.values():
                 c_entity_c_static(mob, obs)
 
         self.player.move(delta_t)
         for enemy in self.enemy_list:
             enemy.move(delta_t)
-        for mob in self.mob_list:
+        for mob in self.mob_list.values():
             mob.move(delta_t)
         for proj in self.projectile_list:
             proj.move(delta_t)
@@ -559,29 +551,6 @@ class ClientMain:
         self.renderer.render()
         # aft_render = time.time()
         # print("Render time: ", aft_render - pre_render)
-        """
-        # Some of the the "client-sided" code
-        proj_remove_list = []
-        for proj in self.projectile_list:
-            proj.move()
-            for enemy in self.enemy_list:
-                if c2c_hit_detection(enemy.position, proj.position, enemy.radius, proj.radius):
-                    proj_remove_list.append(proj)
-                    enemy.lose_health(proj.damage)
-                    break
-            if proj.position[0] < 0 or proj.position[0] > 1000 or\
-                    proj.position[1] < 0 or proj.position[1] > 1000:
-                proj_remove_list.append(proj)
-        for proj in proj_remove_list:
-            self.projectile_list.remove(proj)"""
-
-        """
-        aoe_remove_list = []
-        for aoe in self.aoe_list:
-            if aoe.duration < (cur_frame - aoe.cast_time):
-                aoe_remove_list.append(aoe)
-        for aoe in aoe_remove_list:
-            self.aoe_list.remove(aoe)"""
 
 
 def start_client(client_id="Ben"):

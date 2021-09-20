@@ -70,7 +70,7 @@ class ServerMain:
             player = self.get_player_for_socket(msg.socket)
             x = msg.get_float()
             y = msg.get_float()
-            send_time = msg.get_double()
+            # send_time = msg.get_double()
             player.move_to = np.array([x, y])
             player.new_front(np.array([x, y]))
             new_msg = Message()
@@ -80,7 +80,7 @@ class ServerMain:
             new_msg.push_float(y)
             new_msg.push_float(player.position[0])
             new_msg.push_float(player.position[1])
-            new_msg.push_double(send_time)
+            # new_msg.push_double(send_time)
             self.net_server.complete_message_all(new_msg)
 
         elif msg_id == MessageTypes.CastSpell.value:
@@ -322,6 +322,7 @@ class ServerMain:
             if self.counter_for_fps > 2:
                 self.counter_for_fps = 0
                 print("FPS: ", 1 / self.delta_t)
+
         self.net_server.process_all_messages()
         for player in self.player_list:
             player.update_front()
@@ -476,14 +477,19 @@ class ServerMain:
                             players_hit.append(player)
                     else:
                         mob.move_to = player.position
-                        mob.new_front(player.position)
+                        mob.update_front()
                         mob_move_list.append(mob)
-        msg_body = ""
-        for mob in mob_move_list:
-            msg_body += '\n' + str(mob.mob_id) + ';' + str(mob.move_to[0]) + ',' + str(mob.move_to[1])
-            msg_body += ';' + str(mob.position[0]) + ',' + str(mob.position[1])
         if len(mob_move_list) > 0:
-            self.net_server.message_all(MessageTypes.MobsMoveTo.value, msg_body, True)
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.MobsMoveTo.value)
+            msg.push_int(len(mob_move_list))
+            for mob in mob_move_list:
+                msg.push_int(mob.mob_id)
+                msg.push_float(mob.move_to[0])
+                msg.push_float(mob.move_to[1])
+                msg.push_float(mob.position[0])
+                msg.push_float(mob.position[1])
+            self.net_server.complete_message_all(msg)
         return players_hit
 
     def mob_kill(self, killer, mob):
