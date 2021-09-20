@@ -130,7 +130,7 @@ class AiClientMain(ClientMain):
 
     def optimize_done_callback(self):
         print("Loading new models...")
-        self.agent.load_brain_weights("temp_agent")
+        self.agent.load_brain_weights("temp_agent.pth")
         self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         print("Loaded new models!")
 

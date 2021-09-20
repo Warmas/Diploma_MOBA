@@ -30,5 +30,4 @@ if __name__ == '__main__':
             is_load_weights = True
             weight_file = args.loadable_weights
 
-    print(is_displayed)
     start_ai_client(client_id, is_training, is_displayed, is_load_weights, weight_file)
