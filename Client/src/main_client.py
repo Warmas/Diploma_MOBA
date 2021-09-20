@@ -375,7 +375,7 @@ class ClientMain:
             mob_pos_y = msg.get_float()
             new_mob = Mob(mob_id)
             new_mob.change_position(np.array([mob_pos_x, mob_pos_y]))
-            self.mob_list[new_mob.mob_id](new_mob)
+            self.mob_list[new_mob.mob_id] = new_mob
 
         obs_count = msg.get_int()
         for i in range(obs_count):
