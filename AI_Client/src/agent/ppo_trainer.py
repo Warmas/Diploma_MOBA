@@ -24,7 +24,7 @@ class PpoTrainer:
 
         self.AGENT_N = 2
         self.MEMORY_CAPACITY = 512  # May be changed depending on RAM.
-        self.BATCH_SIZE = 16  # This increases GPU memory usage, hard to pinpoint good value.
+        self.BATCH_SIZE = 8  # This increases GPU memory usage, hard to pinpoint good value.
 
         self.device = device
         self.actor_critic = actor_critic
