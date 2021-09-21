@@ -1,4 +1,4 @@
 @ECHO OFF
 call conda activate diploma
-python start_ai_client.py AI_Adam 0 1
+python start_ai_client.py -i AI_Adam -l test_agent.pth
 PAUSE

@@ -90,8 +90,6 @@ class PpoAgentCriticNn(nn.Module):
 
 class PpoActorCritic:
     def __init__(self, device):
-        self.MODEL_ROOT = "AI_Client/neural_nets/models/ppo/"
-        self.WEIGHT_ROOT = "AI_Client/neural_nets/weights/ppo/"
         # If gpu is to be used
         self.device = device
         n_disc_act = DISC_ACTION_N
@@ -100,8 +98,6 @@ class PpoActorCritic:
                                       n_disc_act, n_cont_act).to(self.device)
 
     def save_brain(self, name="", root_path=""):
-        if not len(root_path):
-            root_path = self.MODEL_ROOT
         if not len(name):
             path = root_path + name + ".pth"
         else:
@@ -109,23 +105,17 @@ class PpoActorCritic:
         torch.save(self.brain, path)
 
     def save_brain_weights(self, name="", root_path=""):
-        if not len(root_path):
-            root_path = self.WEIGHT_ROOT
         if len(name):
             path = root_path + name + ".pth"
         else:
             path = root_path + str(time.time())[:10] + ".pth"
         torch.save(self.brain.state_dict(), path)
 
-    def load_brain(self, name="", root_path=""):
-        if not len(root_path):
-            root_path = self.MODEL_ROOT
+    def load_brain(self, name, root_path=""):
         path = root_path + name
         self.brain = torch.load(path)
 
     def load_brain_weights(self, name, root_path=""):
-        if not len(root_path):
-            root_path = self.WEIGHT_ROOT
         path = root_path + name
         self.brain.load_state_dict(torch.load(path))
         self.brain.eval()

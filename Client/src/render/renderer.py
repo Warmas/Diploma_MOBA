@@ -5,6 +5,7 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 import OpenGL.GL.shaders
 import glm
+from Client.src.render.render_constants import *
 
 from Client.src.render.shader import Shader
 
@@ -30,15 +31,14 @@ class Renderer:
         self.is_displayed = is_displayed
         self.main_loop_function = main_loop_function
         self.should_stop = False
-        self.SCR_WIDTH = 1000
-        self.SCR_HEIGHT = 800
+
         glutInit()
         glutInitDisplayMode(GLUT_RGBA)
-        glutInitWindowSize(self.SCR_WIDTH, self.SCR_HEIGHT)
+        glutInitWindowSize(SCR_WIDTH, SCR_HEIGHT)
         glutInitWindowPosition(0, 0)
         self.window = glutCreateWindow(title=b"MyGame")
         #glutHideWindow()
-        glViewport(0, 0, self.SCR_WIDTH, self.SCR_HEIGHT)
+        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT)
         glutDisplayFunc(self.render)
         glutPostRedisplay()
         glutIdleFunc(main_loop_function)
@@ -51,10 +51,10 @@ class Renderer:
             self.fbo = glGenFramebuffers(1)
             glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
-        self.player = player
+        self.user_player = player
         self.enemy_list = enemy_list
         self.mob_list = mob_list
-        self.obstacle_list = obstacle_list#
+        self.obstacle_list = obstacle_list
         self.heal_place_list = heal_place_list
         self.projectile_list = projectile_list
         self.aoe_list = aoe_list
@@ -151,6 +151,7 @@ class Renderer:
 
     def start(self):
         if self.is_displayed:
+            glLineWidth(3)
             glutMainLoop()
         else:
             while not self.should_stop:
@@ -163,7 +164,7 @@ class Renderer:
             self.should_stop = True
 
     def get_image(self):
-        data = glReadPixels(0, 0, self.SCR_WIDTH, self.SCR_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, outputType=None)
+        data = glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, outputType=None)
         return data
 
     def render(self):
@@ -172,7 +173,7 @@ class Renderer:
         glUseProgram(0)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        glOrtho(0.0, self.SCR_WIDTH, 0.0, self.SCR_HEIGHT, 0.0, 1.0)
+        glOrtho(0.0, SCR_WIDTH, 0.0, SCR_HEIGHT, 0.0, 1.0)
         # glMatrixMode(GL_MODELVIEW)
         # glLoadIdentity()
         for aoe in self.aoe_list:
@@ -184,19 +185,19 @@ class Renderer:
         for mob in self.mob_list.values():
             self.draw_mob(mob)
         # self.draw_mobs()
-        self.draw_player()
+        self.draw_user_player()
         for enemy in self.enemy_list:
-            self.draw_enemy(enemy)
+            self.draw_enemy_player(enemy)
         for projectile in self.projectile_list:
             self.draw_fireball(projectile)
         if self.is_displayed:
             glutSwapBuffers()
 
-    def draw_player(self):
-        pos = self.player.position
-        radius = self.player.radius
+    def draw_user_player(self):
+        pos = self.user_player.position
+        radius = self.user_player.radius
         glColor3f(0.0, 1.0, 0.0)
-        self.draw_circle(pos, radius, side_num=8)
+        self.draw_circle(pos, radius, side_num=10)
 
         # Rendering with drawArrays
         # self.shader.use()
@@ -207,47 +208,24 @@ class Renderer:
         # glDrawArrays(GL_POLYGON, 0, self.player_vertex_n)
         # glUseProgram(0)
 
-        # Drawing the direction marker
-        tri_base_x = pos[0] + self.player.front[0] * radius
-        tri_base_y = pos[1] + self.player.front[1] * radius
-        point1_x = tri_base_x + self.player.front[0] * radius * 0.5
-        point1_y = tri_base_y + self.player.front[1] * radius * 0.5
-        point2_x = tri_base_x - self.player.front[1] * radius * 0.25
-        point2_y = tri_base_y + self.player.front[0] * radius * 0.25
-        point3_x = tri_base_x + self.player.front[1] * radius * 0.25
-        point3_y = tri_base_y - self.player.front[0] * radius * 0.25
-        glBegin(GL_TRIANGLES)
-        glVertex2f(point1_x, self.SCR_HEIGHT - point1_y)
-        glVertex2f(point2_x, self.SCR_HEIGHT - point2_y)
-        glVertex2f(point3_x, self.SCR_HEIGHT - point3_y)
-        glEnd()
-        if self.player.level >= 2:
+        self.draw_direction_marker(self.user_player)
+
+        if self.user_player.level >= 2:
             glColor3f(0.0, 0.3, 0.2)
             self.draw_circle(pos, radius-10, side_num=8)
-        if self.player.level >= 3:
+        if self.user_player.level >= 3:
             glColor3f(0.0, 0.3, 0.2)
             self.draw_circle_line(pos, radius - 6, side_num=8)
         self.draw_hp_bar()
 
-    def draw_enemy(self, enemy):
+    def draw_enemy_player(self, enemy):
         pos = enemy.position
         radius = enemy.radius
         glColor3f(1.0, 0.0, 0.0)
         self.draw_circle(pos, radius, side_num=10)
-        # Drawing the direction marker
-        tri_base_x = pos[0] + enemy.front[0] * radius
-        tri_base_y = pos[1] + enemy.front[1] * radius
-        point1_x = tri_base_x + enemy.front[0] * radius * 0.5
-        point1_y = tri_base_y + enemy.front[1] * radius * 0.5
-        point2_x = tri_base_x - enemy.front[1] * radius * 0.25
-        point2_y = tri_base_y + enemy.front[0] * radius * 0.25
-        point3_x = tri_base_x + enemy.front[1] * radius * 0.25
-        point3_y = tri_base_y - enemy.front[0] * radius * 0.25
-        glBegin(GL_TRIANGLES)
-        glVertex2f(point1_x, self.SCR_HEIGHT - point1_y)
-        glVertex2f(point2_x, self.SCR_HEIGHT - point2_y)
-        glVertex2f(point3_x, self.SCR_HEIGHT - point3_y)
-        glEnd()
+
+        self.draw_direction_marker(enemy)
+
         if enemy.level >= 2:
             glColor3f(0.375, 0.0625, 0.04)
             self.draw_circle(pos, radius-10, side_num=8)
@@ -255,6 +233,22 @@ class Renderer:
             glColor3f(0.375, 0.0625, 0.04)
             self.draw_circle_line(pos, radius - 6, side_num=8)
         self.draw_hp_bar_enemy(enemy)
+
+    def draw_direction_marker(self, player):
+        if not player.is_standing:
+            tri_base_x = player.position[0] + player.front[0] * player.radius
+            tri_base_y = player.position[1] + player.front[1] * player.radius
+            point1_x = tri_base_x + player.front[0] * player.radius * 0.5
+            point1_y = tri_base_y + player.front[1] * player.radius * 0.5
+            point2_x = tri_base_x - player.front[1] * player.radius * 0.25
+            point2_y = tri_base_y + player.front[0] * player.radius * 0.25
+            point3_x = tri_base_x + player.front[1] * player.radius * 0.25
+            point3_y = tri_base_y - player.front[0] * player.radius * 0.25
+            glBegin(GL_TRIANGLES)
+            glVertex2f(point1_x, SCR_HEIGHT - point1_y)
+            glVertex2f(point2_x, SCR_HEIGHT - point2_y)
+            glVertex2f(point3_x, SCR_HEIGHT - point3_y)
+            glEnd()
 
     def draw_mob(self, mob):
         pos = mob.position
@@ -309,27 +303,27 @@ class Renderer:
     #         # self.draw_hp_bar_frame(mob.position)
 
     def draw_hp_bar(self):
-        pos = self.player.position + np.array([0, -20])
-        percentage = self.player.health / self.player.max_health
+        pos = self.user_player.position + np.array([0, -HP_BAR_ELEVATION])
+        percentage = self.user_player.health / self.user_player.max_health
         glColor3f(0.0, 1.0, 0.0)
-        self.draw_rectangle_part(pos, ver_len=3, hor_len=15, percentage=percentage)
-        exp_perc = self.player.experience / ((self.player.level - 1) * 20 + 100)
-        exp_pos = pos + np.array([0, 4])
+        self.draw_rectangle_part(pos, ver_len=HP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH, percentage=percentage)
+        exp_perc = self.user_player.experience / ((self.user_player.level - 1) * 20 + 100)
+        exp_pos = pos + np.array([0, XP_BAR_DISPLACEMENT])
         glColor3f(0.0, 1.0, 0.0)
-        self.draw_rectangle_part(exp_pos, ver_len=1, hor_len=15, percentage=exp_perc)
-        self.draw_hp_bar_frame(self.player.position)
+        self.draw_rectangle_part(exp_pos, ver_len=XP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH, percentage=exp_perc)
+        self.draw_hp_bar_frame(self.user_player.position)
 
     def draw_hp_bar_enemy(self, enemy):
-        pos = enemy.position + np.array([0, -20])
+        pos = enemy.position + np.array([0, -HP_BAR_ELEVATION])
         percentage = enemy.health / enemy.max_health
         glColor3f(1.0, 0.0, 0.0)
-        self.draw_rectangle_part(pos, ver_len=3, hor_len=15, percentage=percentage)
+        self.draw_rectangle_part(pos, ver_len=HP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH, percentage=percentage)
         self.draw_hp_bar_frame(enemy.position)
 
     def draw_hp_bar_frame(self, pos):
-        pos = pos + np.array([0, -20])
+        pos = pos + np.array([0, -HP_BAR_ELEVATION])
         glColor3f(0.0, 0.0, 1.0)
-        self.draw_rectangle_line(pos, ver_len=3, hor_len=15)
+        self.draw_rectangle_line(pos, ver_len=HP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH)
 
     def draw_obstacle(self, obs):
         pos = obs.position
@@ -363,11 +357,11 @@ class Renderer:
         point3_x = pos[0] + projectile.front[1] * radius
         point3_y = pos[1] - projectile.front[0] * radius
         glBegin(GL_TRIANGLES)
-        glVertex2f(point1_x, self.SCR_HEIGHT - point1_y)
-        glVertex2f(point2_x, self.SCR_HEIGHT - point2_y)
-        glVertex2f(point3_x, self.SCR_HEIGHT - point3_y)
+        glVertex2f(point1_x, SCR_HEIGHT - point1_y)
+        glVertex2f(point2_x, SCR_HEIGHT - point2_y)
+        glVertex2f(point3_x, SCR_HEIGHT - point3_y)
         glEnd()
-        if projectile.owner == self.player.player_id:
+        if projectile.owner == self.user_player.player_id:
             glColor3f(0.0, 1.0, 0.0)
         else:
             glColor3f(1.0, 0.0, 0.0)
@@ -381,7 +375,7 @@ class Renderer:
         else:
             glColor3f(1.0, 0.3, 0.0)
         self.draw_circle(pos, radius=radius, side_num=10)
-        if aoe.owner == self.player.player_id:
+        if aoe.owner == self.user_player.player_id:
             glColor3f(0.0, 1.0, 0.0)
         else:
             glColor3f(1.0, 0.0, 0.0)
@@ -391,20 +385,20 @@ class Renderer:
         glBegin(GL_POLYGON)
         for vertex in range(0, side_num):
             angle = float(vertex) / side_num * 2.0 * np.pi
-            glVertex2f(np.cos(angle) * radius + position[0], np.sin(angle) * radius + (self.SCR_HEIGHT - position[1]))
+            glVertex2f(np.cos(angle) * radius + position[0], np.sin(angle) * radius + (SCR_HEIGHT - position[1]))
         glEnd()
 
     def draw_circle_line(self, position, radius, side_num):
         glBegin(GL_LINE_LOOP)
         for vertex in range(0, side_num):
             angle = float(vertex) / side_num * 2.0 * np.pi
-            glVertex2f(np.cos(angle) * radius + position[0], np.sin(angle) * radius + (self.SCR_HEIGHT - position[1]))
+            glVertex2f(np.cos(angle) * radius + position[0], np.sin(angle) * radius + (SCR_HEIGHT - position[1]))
         glEnd()
 
     def draw_rectangle(self, pos, ver_len, hor_len):
         glBegin(GL_QUADS)
         x = pos[0]
-        y = self.SCR_HEIGHT - pos[1]
+        y = SCR_HEIGHT - pos[1]
         glVertex2f(x - hor_len, y - ver_len)
         glVertex2f(x + hor_len, y - ver_len)
         glVertex2f(x + hor_len, y + ver_len)
@@ -414,7 +408,7 @@ class Renderer:
     def draw_rectangle_line(self, pos, ver_len, hor_len):
         glBegin(GL_LINE_LOOP)
         x = pos[0]
-        y = self.SCR_HEIGHT - pos[1]
+        y = SCR_HEIGHT - pos[1]
         glVertex2f(x - hor_len, y - ver_len)
         glVertex2f(x + hor_len, y - ver_len)
         glVertex2f(x + hor_len, y + ver_len)
@@ -424,7 +418,7 @@ class Renderer:
     def draw_rectangle_part(self, pos, ver_len, hor_len, percentage):
         glBegin(GL_QUADS)
         x = pos[0]
-        y = self.SCR_HEIGHT - pos[1]
+        y = SCR_HEIGHT - pos[1]
         glVertex2f(x - hor_len, y - ver_len)
         glVertex2f(x - hor_len + (2 * hor_len * percentage), y - ver_len)
         glVertex2f(x - hor_len + (2 * hor_len * percentage), y + ver_len)

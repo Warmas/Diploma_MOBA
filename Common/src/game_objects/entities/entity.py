@@ -12,6 +12,7 @@ class Entity:
         self.front = g.vec_normalize(np.array([1, 1]))
         self.speed = speed
         self.is_colliding = False
+        self.is_standing = True
         self.col_speed_mod = 1
 
     def change_position(self, pos):
@@ -29,6 +30,8 @@ class Entity:
                 self.is_colliding = False
             else:
                 self.position = self.front * float(self.speed) * self.col_speed_mod * delta_t + self.position
+        else:
+            self.is_standing = True
         # if np.allclose(self.position, self.move_to):
         #    self.position = self.front * float(self.speed) + self.position
 
@@ -63,3 +66,7 @@ class Entity:
 
     def update_front(self):
         self.new_front(self.move_to)
+
+    def set_move_to(self, move_to):
+        self.is_standing = False
+        self.move_to = move_to

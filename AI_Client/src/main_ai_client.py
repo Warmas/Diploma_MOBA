@@ -16,8 +16,8 @@ class AiClientMain(ClientMain):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.agent_env = AgentEnv(self.player, self.enemy_list,
                                   self.mouse_callback, self.cast_1, self.cast_2, self.cast_3, self.cast_4)
-        self.MAX_EPISODE_N = 50
-        self.CHECKPOINT_EP_N = 10
+        self.MAX_EPISODE_N = 500
+        self.CHECKPOINT_EP_N = 50
         self.cur_episode_n = 1
 
         self.is_training = is_training
@@ -144,38 +144,19 @@ class AiClientMain(ClientMain):
                 self.counter_for_fps = 0
                 print("FPS: ", 1 / delta_t)
                 print("Steps done: ", self.steps_done)
+
         for heal_place in self.heal_place_list:
             if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
                 heal_place.available = True
+
         self.process_incoming_messages()
-        self.player.update_front()
-        for enemy in self.enemy_list:
-            enemy.update_front()
-        for mob in self.mob_list.values():
-            mob.update_front()
-        # aft_front_update = time.time()
-        # print("Read + update front: ", aft_front_update - cur_frame)
 
-        for obs in self.obstacle_list:
-            c_entity_c_static(self.player, obs)
-            for enemy in self.enemy_list:
-                c_entity_c_static(enemy, obs)
-            for mob in self.mob_list.values():
-                c_entity_c_static(mob, obs)
+        self.world_update(delta_t)
 
-        self.player.move(delta_t)
-        for enemy in self.enemy_list:
-            enemy.move(delta_t)
-        for mob in self.mob_list.values():
-            mob.move(delta_t)
-        for proj in self.projectile_list:
-            proj.move(delta_t)
-        # aft_move = time.time()
-        # print("Moving time: ", aft_move - aft_front_update)
-
+        # pre_render = time.time()
         self.renderer.render()
         # aft_render = time.time()
-        # print("Render: ", aft_render - aft_move)
+        # print("Render: ", aft_render - pre_render)
 
         # Observe frames with frame delay so we use less memory
         if cur_frame - self.agent_frame_time > self.agent_frame_delay:
@@ -199,8 +180,8 @@ class AiClientMain(ClientMain):
                 if done:
                     self.net_client.send_message(MessageTypes.PauseGame.value, b'1')
                     self.pause_loop()
-        # aft_ai = time.time()
-        # print("AI time: ", aft_ai - aft_render)
+            # aft_ai = time.time()
+            # print("AI time: ", aft_ai - aft_render)
 
 
 def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True,

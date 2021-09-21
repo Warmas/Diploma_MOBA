@@ -70,7 +70,7 @@ class ServerMain:
             player = self.get_player_for_socket(msg.socket)
             x = msg.get_float()
             y = msg.get_float()
-            # send_time = msg.get_double()
+            send_time = msg.get_double()
             player.move_to = np.array([x, y])
             player.new_front(np.array([x, y]))
             new_msg = Message()
@@ -80,11 +80,11 @@ class ServerMain:
             new_msg.push_float(y)
             new_msg.push_float(player.position[0])
             new_msg.push_float(player.position[1])
-            # new_msg.push_double(send_time)
+            new_msg.push_double(send_time)
             self.net_server.complete_message_all(new_msg)
 
         elif msg_id == MessageTypes.CastSpell.value:
-            self.cast_spell(msg.socket, msg.get_body_as_string())
+            self.cast_spell(msg.socket, msg)
 
         elif msg_id == MessageTypes.ClientReady.value:
             self.client_ready_counter += 1
@@ -214,77 +214,82 @@ class ServerMain:
             if player.player_id == player_id:
                 return player
 
-    def cast_spell(self, sock, msg_body):
+    def cast_spell(self, sock, msg):
         player = self.get_player_for_socket(sock)
-        spell_data = msg_body.split(';')
-        spell_id = int(spell_data[0])
+        msg_body = bytearray(msg.get_body())
+        spell_id = msg.get_int()
 
         if spell_id == SpellTypes.Fireball.value:
-            cast_time = spell_data[1]
-            cast_pos_data = spell_data[2].split(',')
-            front_data = spell_data[3].split(',')
-            x_p = float(cast_pos_data[0])
-            y_p = float(cast_pos_data[1])
-            cast_pos = np.array([x_p, y_p])  # Could use this or player position!
-            x_f = float(front_data[0])
-            y_f = float(front_data[1])
-            front = np.array([x_f, y_f])
+            cast_time = msg.get_double()
+            mouse_x = msg.get_float()
+            mouse_y = msg.get_float()
+            front = g.new_front(np.array([mouse_x, mouse_y]), player.position)
             fireball = casting.Fireball(cast_time, player.player_id, player.position, front)
             fireball.damage = fireball.damage * player.level
             self.projectile_list.append(fireball)
-            new_msg_body = str(player.player_id) + ':' + msg_body
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
+            new_msg = Message()
+            new_msg.set_header_by_id(MessageTypes.CastSpell.value)
+            new_msg.push_string(player.player_id)
+            new_msg.push_bytes(msg_body)
+            new_msg.push_float(player.position[0])
+            new_msg.push_float(player.position[1])
+            self.net_server.complete_message_all(new_msg)
 
-        if spell_id == SpellTypes.BurningGround.value:
-            cast_time = float(spell_data[1])
-            cast_pos_data = spell_data[2].split(',')
-            x_p = float(cast_pos_data[0])
-            y_p = float(cast_pos_data[1])
+        elif spell_id == SpellTypes.BurningGround.value:
+            cast_time = msg.get_double()
+            x_p = msg.get_float()
+            y_p = msg.get_float()
             cast_pos = np.array([x_p, y_p])
             burn_ground = casting.BurnGround(player.player_id, cast_pos, cast_time)
             burn_ground.health_modifier = burn_ground.health_modifier * player.level
             self.aoe_list.append(burn_ground)
-            new_msg_body = str(player.player_id) + ':' + msg_body
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
+            new_msg = Message()
+            new_msg.set_header_by_id(MessageTypes.CastSpell.value)
+            new_msg.push_string(player.player_id)
+            new_msg.push_bytes(msg_body)
+            self.net_server.complete_message_all(new_msg)
 
-        if spell_id == SpellTypes.HolyGround.value:
-            cast_time = float(spell_data[1])
-            cast_position_data = spell_data[2].split(',')
-            x_p = float(cast_position_data[0])
-            y_p = float(cast_position_data[1])
-            cast_position = np.array([x_p, y_p])
-            holy_ground = casting.HolyGround(player.player_id, cast_position, cast_time)
+        elif spell_id == SpellTypes.HolyGround.value:
+            cast_time = msg.get_double()
+            x_p = msg.get_float()
+            y_p = msg.get_float()
+            cast_pos = np.array([x_p, y_p])
+            holy_ground = casting.HolyGround(player.player_id, cast_pos, cast_time)
             holy_ground.health_modifier = holy_ground.health_modifier * player.level
             self.aoe_list.append(holy_ground)
-            new_msg_body = str(player.player_id) + ':' + msg_body
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
+            new_msg = Message()
+            new_msg.set_header_by_id(MessageTypes.CastSpell.value)
+            new_msg.push_string(player.player_id)
+            new_msg.push_bytes(msg_body)
+            self.net_server.complete_message_all(new_msg)
 
-        if spell_id == SpellTypes.Knockback.value:
-            front_data = spell_data[1].split(',')
-            x_f = float(front_data[0])
-            y_f = float(front_data[1])
-            front = np.array([x_f, y_f])
-            player.move_to = player.position
-            player.front = front
-            new_msg_body = str(player.player_id) + ':' + str(SpellTypes.Knockback.value)
-            new_msg_body += ';' + spell_data[1] + ';' + str(player.position[0]) + ',' + str(player.position[1])
-            for p_to_check in self.player_list:
-                if not p_to_check.player_id == player.player_id:
-                    if cone_hit_detection(player.position, player.front,
-                                          angle=60, radius=100, point_to_check=p_to_check.position):
-                        p_pos = p_to_check.position + g.new_front(p_to_check.position, player.position) * 100
-                        p_to_check.change_position(p_pos)
-                    new_msg_body += "\n\n" + p_to_check.player_id + '\n' \
-                                    + str(p_to_check.position[0]) + ',' + str(p_to_check.position[1])
-            new_msg_body += "\n\n\n"
-            for m_to_check in self.mob_list:
-                if cone_hit_detection(player.position, player.front,
-                                      angle=60, radius=100, point_to_check=m_to_check.position):
-                    m_pos = m_to_check.position + g.new_front(m_to_check.position, player.position) * 100
-                    m_to_check.change_position(m_pos)
-                    new_msg_body += "\n\n" + str(m_to_check.mob_id) + '\n' \
-                                    + str(m_to_check.position[0]) + ',' + str(m_to_check.position[1])
-            self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
+        elif spell_id == SpellTypes.Knockback.value:
+            pass
+            #front_data = spell_data[1].split(',')
+            #x_f = float(front_data[0])
+            #y_f = float(front_data[1])
+            #front = np.array([x_f, y_f])
+            #player.move_to = player.position
+            #player.front = front
+            #new_msg_body = str(player.player_id) + ':' + str(SpellTypes.Knockback.value)
+            #new_msg_body += ';' + spell_data[1] + ';' + str(player.position[0]) + ',' + str(player.position[1])
+            #for p_to_check in self.player_list:
+            #    if not p_to_check.player_id == player.player_id:
+            #        if cone_hit_detection(player.position, player.front,
+            #                              angle=60, radius=100, point_to_check=p_to_check.position):
+            #            p_pos = p_to_check.position + g.new_front(p_to_check.position, player.position) * 100
+            #            p_to_check.change_position(p_pos)
+            #        new_msg_body += "\n\n" + p_to_check.player_id + '\n' \
+            #                        + str(p_to_check.position[0]) + ',' + str(p_to_check.position[1])
+            #new_msg_body += "\n\n\n"
+            #for m_to_check in self.mob_list:
+            #    if cone_hit_detection(player.position, player.front,
+            #                          angle=60, radius=100, point_to_check=m_to_check.position):
+            #        m_pos = m_to_check.position + g.new_front(m_to_check.position, player.position) * 100
+            #        m_to_check.change_position(m_pos)
+            #        new_msg_body += "\n\n" + str(m_to_check.mob_id) + '\n' \
+            #                        + str(m_to_check.position[0]) + ',' + str(m_to_check.position[1])
+            #self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
     def pause_loop(self, game_over=False, loser_id=""):
         msg_body = b''
@@ -384,7 +389,7 @@ class ServerMain:
             msg_body = str(casting.ObjectIds.Projectile.value) + ':'
             for proj in proj_remove_list:
                 self.projectile_list.remove(proj)
-                msg_body += '\n' + proj.owner + ';' + proj.cast_time
+                msg_body += '\n' + proj.owner + ';' + str(proj.cast_time)
             self.net_server.message_all(MessageTypes.RemoveGameObject.value, msg_body, True)
 
         aoe_remove_list = []
