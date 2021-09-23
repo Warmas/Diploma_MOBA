@@ -11,6 +11,7 @@ class SpellTypes(Enum):
 class ObjectIds(Enum):
     Projectile = 1
     Aoe = 2
+    HealPlace = 3
 
 
 class SpellCooldowns:
@@ -29,6 +30,9 @@ class Projectile:
         self.radius = radius
         self.speed = speed
         self.damage = damage
+
+    def on_update(self, delta_t):
+        self.move(delta_t)
 
     def move(self, delta_t):
         self.position = self.front * float(self.speed) * delta_t + self.position

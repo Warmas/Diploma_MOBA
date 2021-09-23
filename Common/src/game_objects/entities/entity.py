@@ -23,17 +23,21 @@ class Entity:
     def turn(self, new_front):
         self.front = new_front
 
+    def on_update(self, delta_t):
+        self.move(delta_t)
+        # Necessary because of collision effect with obstacles, also makes it less error-prone
+        self.update_front()
+
     def move(self, delta_t):
+        # if np.allclose(self.position, self.move_to):
         if g.distance(self.position, self.move_to) > 1:
             if not self.is_colliding:
                 self.position = self.front * float(self.speed) * delta_t + self.position
-                self.is_colliding = False
             else:
                 self.position = self.front * float(self.speed) * self.col_speed_mod * delta_t + self.position
         else:
             self.is_standing = True
-        # if np.allclose(self.position, self.move_to):
-        #    self.position = self.front * float(self.speed) + self.position
+        self.is_colliding = False
 
     def lose_health(self, amount_to_lose):
         """Returns true if the entity should die, false otherwise"""

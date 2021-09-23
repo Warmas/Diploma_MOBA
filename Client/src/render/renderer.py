@@ -176,7 +176,7 @@ class Renderer:
         glOrtho(0.0, SCR_WIDTH, 0.0, SCR_HEIGHT, 0.0, 1.0)
         # glMatrixMode(GL_MODELVIEW)
         # glLoadIdentity()
-        for aoe in self.aoe_list:
+        for aoe in self.aoe_list.values():
             self.draw_aoe(aoe)
         for obs in self.obstacle_list:
             self.draw_obstacle(obs)
@@ -188,7 +188,7 @@ class Renderer:
         self.draw_user_player()
         for enemy in self.enemy_list:
             self.draw_enemy_player(enemy)
-        for projectile in self.projectile_list:
+        for projectile in self.projectile_list.values():
             self.draw_fireball(projectile)
         if self.is_displayed:
             glutSwapBuffers()

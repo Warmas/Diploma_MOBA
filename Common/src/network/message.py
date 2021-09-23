@@ -13,16 +13,15 @@ class MessageTypes(Enum):
     UpdateHealth = 8
     MobsMoveTo = 9
     MobsKilled = 10
-    HealPlaceChange = 11
-    PauseGame = 12
-    ClientReady = 13
-    StartGame = 14
-    ResetMap = 15
-    ContinueGame = 16
-    TransitionData = 17
-    TransferDone = 18
-    OptimizeDone = 19
-    CloseGame = 20
+    PauseGame = 11
+    ClientReady = 12
+    StartGame = 13
+    ResetMap = 14
+    ContinueGame = 15
+    TransitionData = 16
+    TransferDone = 17
+    OptimizeDone = 18
+    CloseGame = 19
 
 
 class Message:
@@ -101,6 +100,11 @@ class Message:
         self.body += bytes_to_push
         body_size_b = struct.pack("!i", len(self.body))
         self.header = self.header[:4] + body_size_b
+
+    def get_bytes(self, bytes_n):
+        bytes_to_get = self.body[:bytes_n]
+        self.body = self.body[bytes_n:]
+        return bytes_to_get
 
     def push_double(self, num):
         double_data = struct.pack("!d", num)

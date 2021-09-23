@@ -1,4 +1,5 @@
 from collections import namedtuple
+from Client.src.render.render_constants import *
 
 State = namedtuple("State", "image")
 Action = namedtuple("Action", ("disc_action", "mouse_x", "mouse_y"))
@@ -15,5 +16,5 @@ class Transition:
 
 DISC_ACTION_N = 6
 CONT_ACTION_N = 2
-SCREEN_WIDTH = 1000
-SCREEN_HEIGHT = 800
+SCREEN_WIDTH = SCR_WIDTH
+SCREEN_HEIGHT = SCR_HEIGHT

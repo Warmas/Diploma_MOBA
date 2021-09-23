@@ -4,7 +4,6 @@ import struct
 import torch
 
 from Client.src.main_client import ClientMain, MessageTypes
-from Common.src.game_objects.collision.collision_eval import *
 from AI_Client.src.agent.environment import *
 from AI_Client.src.agent.ppo_agent import PpoActorCritic
 from AI_Client.src.agent.ppo_trainer import PpoTrainer
@@ -24,7 +23,7 @@ class AiClientMain(ClientMain):
         self.device = None
         self.agent_trainer = None
         agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
-        self.agent_weight_path = agent_weight_path_root + weight_file
+        self.agent_weight_path_root = agent_weight_path_root + weight_file
 
         if torch.cuda.is_available():
             print("Using cuda")
@@ -34,17 +33,27 @@ class AiClientMain(ClientMain):
             self.device = "cpu"
         self.agent = PpoActorCritic(self.device)
         if not self.is_training:
-            self.agent.load_brain_weights(self.agent_weight_path)
-            print("Loaded weights from path: ", self.agent_weight_path)
+            self.agent.load_brain_weights(self.agent_weight_path_root)
+            print("Loaded weights from path: ", self.agent_weight_path_root)
         else:
             if is_load_weights:
-                self.agent.load_brain_weights(self.agent_weight_path)
-                print("Loaded weights from path: ", self.agent_weight_path)
+                self.agent.load_brain_weights(self.agent_weight_path_root)
+                print("Loaded weights from path: ", self.agent_weight_path_root)
             self.agent_trainer = PpoTrainer(self.device, self.agent)
 
         self.steps_done = 0
         self.agent_frame_delay = 0.15
         self.agent_frame_time = 0
+
+    def process_agent_message(self, msg_id, msg):
+        if msg_id == MessageTypes.TransitionData.value:
+            self.transition_data_process(msg.body)
+
+        elif msg_id == MessageTypes.TransferDone.value:
+            self.transfer_done_callback()
+
+        elif msg_id == MessageTypes.OptimizeDone.value:
+            self.optimize_done_callback()
 
     def pause_loop(self, game_over=False, loser_id=""):
         self.is_paused = True
@@ -115,22 +124,22 @@ class AiClientMain(ClientMain):
             print("Saving models...")
             # We don't really need checkpoints as we have to save each episode anyway
             if (self.cur_episode_n % self.CHECKPOINT_EP_N) == 0:
-                self.agent.save_brain_weights("temp_agent")
+                self.agent.save_brain_weights("temp_agent", self.agent_weight_path_root)
             else:
-                self.agent.save_brain_weights("temp_agent")
+                self.agent.save_brain_weights("temp_agent", self.agent_weight_path_root)
             print("Saved models!")
             self.agent_trainer.clear_memory()
             self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
             self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         else:
             print("Saving final agent...")
-            self.agent.save_brain_weights("final_agent")
+            self.agent.save_brain_weights("final_agent", self.agent_weight_path_root)
             print("Saved final agent!")
             self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
 
     def optimize_done_callback(self):
         print("Loading new models...")
-        self.agent.load_brain_weights("temp_agent.pth")
+        self.agent.load_brain_weights("temp_agent.pth", self.agent_weight_path_root)
         self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         print("Loaded new models!")
 

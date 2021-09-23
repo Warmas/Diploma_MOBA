@@ -15,4 +15,14 @@ class HealPlace:
         self.hor_len = hor_len
         self.available = True
         self.cd_duration = 10
+        self.cd_left = 0
         self.cd_start = 0
+
+    def use(self):
+        self.available = False
+        self.cd_left = self.cd_duration
+
+    def on_update(self, delta_t):
+        self.cd_left = self.cd_left - delta_t
+        if self.cd_left < 0:
+            self.available = True

@@ -25,8 +25,8 @@ class ClientMain:
         self.mob_list = {}
         self.obstacle_list = []
         self.heal_place_list = []
-        self.projectile_list = []
-        self.aoe_list = []
+        self.projectile_list = {}
+        self.aoe_list = {}
         self.last_frame = 0
         self.counter_for_fps = 0
         self.is_fps_on = True
@@ -131,7 +131,7 @@ class ClientMain:
             heal_place_data_list = msg_data[4].split('\n')
             for h_p_data in heal_place_data_list[1:]:
                 data = h_p_data.split(':')
-                h_p_id = data[0]
+                h_p_id = int(data[0])
                 h_p = HealPlace(h_p_id)
                 pos_data = data[1].split(',')
                 x_p = float(pos_data[0])
@@ -199,7 +199,7 @@ class ClientMain:
                 cast_pos = np.array([player_x, player_y])
                 front = g.new_front(np.array([mouse_x, mouse_y]), cast_pos)
                 fireball = Fireball(cast_time, player_id, cast_pos, front)
-                self.projectile_list.append(fireball)
+                self.projectile_list[(cast_time, player_id)] = fireball
 
             elif spell_id == SpellTypes.BurningGround.value:
                 cast_time = msg.get_double()
@@ -207,7 +207,7 @@ class ClientMain:
                 y_p = msg.get_float()
                 cast_pos = np.array([x_p, y_p])
                 burn_ground = BurnGround(player_id, cast_pos, cast_time)
-                self.aoe_list.append(burn_ground)
+                self.aoe_list[(cast_time, player_id)] = burn_ground
 
             elif spell_id == SpellTypes.HolyGround.value:
                 cast_time = msg.get_double()
@@ -215,7 +215,7 @@ class ClientMain:
                 y_p = msg.get_float()
                 cast_pos = np.array([x_p, y_p])
                 holy_ground = HolyGround(player_id, cast_pos, cast_time)
-                self.aoe_list.append(holy_ground)
+                self.aoe_list[(cast_time, player_id)] = holy_ground
 
             elif spell_id == SpellTypes.Knockback.value:
                 pass
@@ -256,28 +256,23 @@ class ClientMain:
                 #            mob.change_position(new_pos)
 
         elif msg_id == MessageTypes.RemoveGameObject.value:
-            msg_data = msg.get_body_as_string().split(':')
-            object_id = int(msg_data[0])
-            data_list = msg_data[1].split('\n')
+            object_id = msg.get_int()
+            object_num = msg.get_int()
             if object_id == ObjectIds.Projectile.value:
-                for data in data_list[1:]:
-                    d = data.split(';')
-                    owner = d[0]
-                    cast_time = float(d[1])
-                    for proj in self.projectile_list:
-                        if proj.owner == owner and proj.cast_time == cast_time:
-                            self.projectile_list.remove(proj)
-                            break
-
-            if object_id == ObjectIds.Aoe.value:
-                for data in data_list[1:]:
-                    d = data.split(';')
-                    owner = d[0]
-                    cast_time = float(d[1])
-                    for aoe in self.aoe_list:
-                        if aoe.owner == owner and aoe.cast_time == cast_time:
-                            self.aoe_list.remove(aoe)
-                            break
+                for i in range(object_num):
+                    owner = msg.get_string()
+                    cast_time = msg.get_double()
+                    self.projectile_list.pop((cast_time, owner))
+            elif object_id == ObjectIds.Aoe.value:
+                for i in range(object_num):
+                    owner = msg.get_string()
+                    cast_time = msg.get_double()
+                    self.aoe_list.pop((cast_time, owner))
+            elif object_id == ObjectIds.HealPlace.value:
+                h_p_id = msg.get_int()
+                for heal_place in self.heal_place_list:
+                    if heal_place.id == h_p_id:
+                        heal_place.use()
 
         elif msg_id == MessageTypes.UpdateHealth.value:
             msg_data = msg.get_body_as_string().split("\n\n")
@@ -302,19 +297,11 @@ class ClientMain:
                 self.mob_list[mob_id].update_health(mob_hp)
 
         elif msg_id == MessageTypes.MobsKilled.value:
-            msg_data = msg.get_body_as_string().split('\n')
-            for data in msg_data[1:]:
-                d = data.split(':')
-                killer_id = d[0]
-                mob_id = int(d[1])
+            num_mobs_killed = msg.get_int()
+            for i in range(num_mobs_killed):
+                killer_id = msg.get_string()
+                mob_id = msg.get_int()
                 self.mob_kill(killer_id, mob_id)
-
-        elif msg_id == MessageTypes.HealPlaceChange.value:
-            h_p_id = msg.get_body_as_string()
-            for heal_place in self.heal_place_list:
-                if heal_place.id == h_p_id:
-                    heal_place.cd_start = time.time()
-                    heal_place.available = False
 
         elif msg_id == MessageTypes.StartGame.value:
             self.start_game = True
@@ -322,7 +309,6 @@ class ClientMain:
         elif msg_id == MessageTypes.ResetMap.value:
             self.map_reset_callback(msg)
 
-        # AI training stuff
         elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
                 game_over = False
@@ -332,14 +318,11 @@ class ClientMain:
                     loser_id = msg.get_string()
                 self.pause_loop(game_over, loser_id)
 
-        elif msg_id == MessageTypes.TransitionData.value:
-            self.transition_data_process(msg.body)
+        # AI client messages
+        self.process_agent_message(msg_id, msg)
 
-        elif msg_id == MessageTypes.TransferDone.value:
-            self.transfer_done_callback()
-
-        elif msg_id == MessageTypes.OptimizeDone.value:
-            self.optimize_done_callback()
+    def process_agent_message(self, msg_id, msg):
+        pass
 
     def map_reset_callback(self, msg):
         self.projectile_list.clear()
@@ -397,15 +380,6 @@ class ClientMain:
         else:
             print("You won!")
         self.stop()
-
-    def transition_data_process(self, msg_body):
-        pass
-
-    def transfer_done_callback(self):
-        pass
-
-    def optimize_done_callback(self):
-        pass
 
     def keyboard_callback(self, key, mouse_x, mouse_y):
         if key == KeyIds.Key_1.value:
@@ -527,10 +501,6 @@ class ClientMain:
                 self.counter_for_fps = 0
                 print("FPS: ", 1 / delta_t)
 
-        for heal_place in self.heal_place_list:
-            if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
-                heal_place.available = True
-
         self.process_incoming_messages()
 
         self.world_update(delta_t)
@@ -541,12 +511,8 @@ class ClientMain:
         # print("Render time: ", aft_render - pre_render)
 
     def world_update(self, delta_t):
-        # Necessary because of collision effect with obstacles
-        self.player.update_front()
-        for enemy in self.enemy_list:
-            enemy.update_front()
-        for mob in self.mob_list.values():
-            mob.update_front()
+        for heal_place in self.heal_place_list:
+            heal_place.on_update(delta_t)
 
         for obs in self.obstacle_list:
             c_entity_c_static(self.player, obs)
@@ -555,13 +521,13 @@ class ClientMain:
             for mob in self.mob_list.values():
                 c_entity_c_static(mob, obs)
 
-        self.player.move(delta_t)
+        self.player.on_update(delta_t)
         for enemy in self.enemy_list:
-            enemy.move(delta_t)
+            enemy.on_update(delta_t)
         for mob in self.mob_list.values():
-            mob.move(delta_t)
-        for proj in self.projectile_list:
-            proj.move(delta_t)
+            mob.on_update(delta_t)
+        for proj in self.projectile_list.values():
+            proj.on_update(delta_t)
 
 
 def start_client(client_id="Ben"):
