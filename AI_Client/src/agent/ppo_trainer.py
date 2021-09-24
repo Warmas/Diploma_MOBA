@@ -38,6 +38,13 @@ class PpoTrainer:
             self.memory_list.append(TrainingMemory(self.MEMORY_CAPACITY))
 
     def optimize_models(self):
+        reward_sum_list = []
+        for memory in self.memory_list:
+            reward_sum = 0
+            for reward in memory.reward_list:
+                reward_sum += reward
+            reward_sum_list.append(reward_sum)
+
         for mem_n in range(len(self.memory_list)):
             memory = self.memory_list[mem_n]
             mem_len = len(memory)
@@ -94,7 +101,7 @@ class PpoTrainer:
             batch_act_prob_list.clear()
             del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
         return actor_loss_list, critic_loss_list, combined_loss_list, \
-            disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list
+            disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list
 
     def optimization_step(self, image_t, disc_action, r_disc, old_act_prob):
         disc_policy, cont_means, cont_vars, v_predicted = self.actor_critic.brain(image_t)

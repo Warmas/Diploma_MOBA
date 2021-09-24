@@ -22,6 +22,7 @@ class MessageTypes(Enum):
     TransferDone = 17
     OptimizeDone = 18
     CloseGame = 19
+    DetailedHpChange = 20
 
 
 class Message:

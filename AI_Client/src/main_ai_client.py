@@ -2,19 +2,23 @@ import time
 import struct
 
 import torch
+import numpy as np
 
 from Client.src.main_client import ClientMain, MessageTypes
-from AI_Client.src.agent.environment import *
+from Common.src.game_constants import *
 from AI_Client.src.agent.ppo_agent import PpoActorCritic
 from AI_Client.src.agent.ppo_trainer import PpoTrainer
 from AI_Client.src.agent.env_globals import *
+from AI_Client.src.agent.reward_constants import *
+from OpenGL.GLUT import *
 
 
+# Designed for handling 2 players
 class AiClientMain(ClientMain):
     def __init__(self, player_id, is_training, is_displayed, is_load_weights, weight_file):
         super(AiClientMain, self).__init__(player_id, is_displayed)
-        self.agent_env = AgentEnv(self.player, self.enemy_list,
-                                  self.mouse_callback, self.cast_1, self.cast_2, self.cast_3, self.cast_4)
+        self.enemy_player = None
+
         self.MAX_EPISODE_N = 500
         self.CHECKPOINT_EP_N = 50
         self.cur_episode_n = 1
@@ -42,8 +46,14 @@ class AiClientMain(ClientMain):
             self.agent_trainer = PpoTrainer(self.device, self.agent)
 
         self.steps_done = 0
-        self.agent_frame_delay = 0.15
         self.agent_frame_time = 0
+        self.AGENT_FRAME_DELAY = 0.15
+        self.cur_reward = 0
+
+    def start_game_callback(self):
+        for player in self.player_dict.values():
+            if not player.player_id == self.user_player.player_id:
+                self.enemy_player = player
 
     def process_agent_message(self, msg_id, msg):
         if msg_id == MessageTypes.TransitionData.value:
@@ -55,16 +65,45 @@ class AiClientMain(ClientMain):
         elif msg_id == MessageTypes.OptimizeDone.value:
             self.optimize_done_callback()
 
+        elif msg_id == MessageTypes.DetailedHpChange.value:
+            dd_num = msg.get_int()
+            for i in range(dd_num):
+                dealer_type_id = msg.get_int()
+                dealer_id = msg.get_string()
+                taker_type_id = msg.get_int()
+                taker_id = msg.get_string()
+                amount = msg.get_int()
+                if dealer_type_id == ObjectIds.Player.value and dealer_id == self.user_player.player_id:
+                    if taker_type_id == ObjectIds.Player.value:
+                        self.cur_reward += DMG_DEAL_TO_PLAYER_REWARD_PER_DAMAGE * amount
+                    else:
+                        self.cur_reward += DMG_DEAL_TO_MOB_REWARD_PER_DAMAGE * amount
+                elif taker_type_id == ObjectIds.Player.value and taker_id == self.user_player.player_id:
+                    self.cur_reward += DMG_TAKE_REWARD_PER_DAMAGE
+
+            hg_num = msg.get_int()
+            for i in range(hg_num):
+                player_id = msg.get_string()
+                amount = msg.get_int()
+                if player_id == self.user_player.player_id:
+                    self.cur_reward += HEAL_REWARD_PER_HEAL * amount
+
+    def agent_mob_kill(self, killer_id, is_lvl_up):
+        if killer_id == self.user_player.player_id:
+            self.cur_reward += MOB_KILL_REWARD
+            if is_lvl_up:
+                self.cur_reward += LVL_UP_REWARD
+
     def pause_loop(self, game_over=False, loser_id=""):
         self.is_paused = True
         self.start_game = False
         self.steps_done = 0
         if game_over:
-            if loser_id == self.player.player_id:
-                self.agent_trainer.memory.reward_list[-1] += self.agent_env.get_lose_reward()
+            if loser_id == self.user_player.player_id:
+                self.agent_trainer.memory.reward_list[-1] += LOSE_REWARD
                 print("You lost!")
             else:
-                self.agent_trainer.memory.reward_list[-1] += self.agent_env.get_win_reward()
+                self.agent_trainer.memory.reward_list[-1] += WIN_REWARD
                 print("You won!")
         started_transfer = False
         while not self.start_game:
@@ -110,7 +149,7 @@ class AiClientMain(ClientMain):
     def transfer_done_callback(self):
         print("Optimization started...")
         actor_loss_list, critic_loss_list, combined_loss_list, \
-        disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list = \
+        disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list = \
             self.agent_trainer.optimize_models()
         print("Actor loss: ", actor_loss_list,
               "\n\nCritic loss: ", critic_loss_list,
@@ -119,6 +158,8 @@ class AiClientMain(ClientMain):
               "\n\nContinuous action loss:", cont_act_loss_list,
               "\n\nDiscrete entropy loss:", disc_entropy_loss_list,
               "\n\nContinuous entropy loss:", cont_entropy_loss_list)
+        print("Reward sums: ", reward_sum_list)
+        print("Finished episode: ", self.cur_episode_n)
         self.cur_episode_n += 1
         if self.cur_episode_n < self.MAX_EPISODE_N:
             print("Saving models...")
@@ -168,7 +209,7 @@ class AiClientMain(ClientMain):
         # print("Render: ", aft_render - pre_render)
 
         # Observe frames with frame delay so we use less memory
-        if cur_frame - self.agent_frame_time > self.agent_frame_delay:
+        if cur_frame - self.agent_frame_time > self.AGENT_FRAME_DELAY:
             self.agent_frame_time = cur_frame
             image = self.renderer.get_image()
             # Rearrange dimensions because the convolutional layer requires color channel matrices not RGB matrix
@@ -179,18 +220,36 @@ class AiClientMain(ClientMain):
             image_t = torch.from_numpy(np.asarray(image_flatten)).to(self.device)
             action, act_prob = self.agent.select_action(image_t.unsqueeze(0))
             del image_t
-            obs, reward, done, info = self.agent_env.step(action)
+
+            mouse_x = action.mouse_x
+            mouse_y = action.mouse_y
+            if action.disc_action == 0:
+                pass
+            elif action.disc_action == 1:
+                self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
+            elif action.disc_action == 2:
+                self.cast_1(mouse_x, mouse_y)
+            elif action.disc_action == 3:
+                self.cast_2(mouse_x, mouse_y)
+            elif action.disc_action == 4:
+                self.cast_3(mouse_x, mouse_y)
+            elif action.disc_action == 5:
+                self.cast_4(mouse_x, mouse_y)
+
             if self.is_training:
                 self.steps_done += 1
-                transition = Transition(state, action.disc_action, reward, act_prob)
+                transition = Transition(state, action.disc_action, self.cur_reward, act_prob)
+                self.cur_reward = 0
                 if not self.agent_trainer.memory.push(transition):
                     print("Training memory full")
-                    done = True
-                if done:
                     self.net_client.send_message(MessageTypes.PauseGame.value, b'1')
                     self.pause_loop()
             # aft_ai = time.time()
+            # self.ai_time = aft_ai - aft_render
             # print("AI time: ", aft_ai - aft_render)
+        else:
+            pass
+            #self.ai_time = 0
 
 
 def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True,

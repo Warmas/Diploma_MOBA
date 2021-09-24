@@ -20,8 +20,11 @@ class Player(Entity):
             if self.level < self.max_level:
                 self.experience = self.experience - (100 + 20 * (self.level - 1))
                 self.level += 1
+                return True
             else:
                 self.experience = 0
+                return False
+        return False
 
     def reset_stats(self):
         self.level = 1

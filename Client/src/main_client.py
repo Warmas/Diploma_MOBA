@@ -12,6 +12,7 @@ from Common.src.game_objects.entities.mob import Mob
 from Common.src.game_objects.statics.obstacle import *
 from Common.src.game_objects.collision.collision_eval import *
 import Common.src.globals as g
+from Common.src.game_constants import *
 
 
 class ClientMain:
@@ -20,13 +21,13 @@ class ClientMain:
         self.net_thread = None
 
         self.player_id = player_id
-        self.player = Player(self.player_id)
-        self.enemy_list = []
-        self.mob_list = {}
+        self.user_player = Player(self.player_id)
+        self.player_dict = {player_id: self.user_player}
+        self.mob_dict = {}
         self.obstacle_list = []
         self.heal_place_list = []
-        self.projectile_list = {}
-        self.aoe_list = {}
+        self.projectile_dict = {}
+        self.aoe_dict = {}
         self.last_frame = 0
         self.counter_for_fps = 0
         self.is_fps_on = True
@@ -38,13 +39,15 @@ class ClientMain:
         self.renderer = Renderer(is_displayed,
                                  self.game_loop,
                                  self.keyboard_callback, self.mouse_callback,
-                                 self.player,
-                                 self.enemy_list,
-                                 self.mob_list,
+                                 self.user_player,
+                                 self.player_dict,
+                                 self.mob_dict,
                                  self.obstacle_list,
                                  self.heal_place_list,
-                                 self.projectile_list,
-                                 self.aoe_list)
+                                 self.projectile_dict,
+                                 self.aoe_dict)
+
+        # self.ai_time = 0
 
     def start(self):
         # self.net_thread = threading.Thread(target=self.net_client.start_connection, args=("127.0.0.1", 54321))
@@ -89,7 +92,7 @@ class ClientMain:
             pos = msg_data[0].split(',')
             x_mp = float(pos[0])
             y_mp = float(pos[1])
-            self.player.change_position(np.array([x_mp, y_mp]))
+            self.user_player.change_position(np.array([x_mp, y_mp]))
             enemy_data_list = msg_data[1].split('\n')
             for player_data in enemy_data_list[1:]:
                 pnd = player_data.split(':')
@@ -104,7 +107,7 @@ class ClientMain:
                 y_mt = float(move_to[1])
                 enemy.set_move_to(np.array([x_mt, y_mt]))
                 enemy.new_front(enemy.move_to)
-                self.enemy_list.append(enemy)
+                self.player_dict[enemy.player_id] = enemy
             mob_data_list = msg_data[2].split('\n')
             for mob_data in mob_data_list[1:]:
                 mnd = mob_data.split(':')
@@ -119,7 +122,7 @@ class ClientMain:
                 y_mt = float(move_to[1])
                 mob.set_move_to(np.array([x_mt, y_mt]))
                 mob.new_front(mob.move_to)
-                self.mob_list[mob.mob_id] = mob
+                self.mob_dict[mob.mob_id] = mob
             obstacle_data_list = msg_data[3].split('\n')
             for obs_data in obstacle_data_list[1:]:
                 obs = CircleObstacle()
@@ -150,7 +153,7 @@ class ClientMain:
             x_p = float(position[0])
             y_p = float(position[1])
             enemy.change_position(np.array([x_p, y_p]))
-            self.enemy_list.append(enemy)
+            self.player_dict[enemy.player_id] = enemy
 
         elif msg_id == MessageTypes.PlayerMoveTo.value:
             player_id = msg.get_string()
@@ -158,20 +161,22 @@ class ClientMain:
             y_mt = msg.get_float()
             x_p = msg.get_float()
             y_p = msg.get_float()
-            if self.player.player_id == player_id:
-                # In theory setting the position could cause jumps, but it is smooth and corrects latency error.
-                self.player.position = np.array([x_p, y_p])
-                self.player.set_move_to(np.array([x_mt, y_mt]))
-                self.player.new_front(self.player.move_to)
-            else:
-                for enemy in self.enemy_list:
-                    if enemy.player_id == player_id:
-                        enemy.position = np.array([x_p, y_p])
-                        enemy.set_move_to(np.array([x_mt, y_mt]))
-                        enemy.new_front(enemy.move_to)
+            player = self.player_dict[player_id]
+            new_pos = np.array([x_p, y_p])
+            # should_post = False
+            if g.distance(player.position, new_pos) > 50:
+                # should_post = True
+                print("Large position jump: ")
+                print("\tPast pos: ", player.position)
+                print("\tNew pos: ", new_pos)
+            player.position = new_pos  # This causes "jumps" but corrects any error
+            player.set_move_to(np.array([x_mt, y_mt]))
+            player.new_front(player.move_to)
             cur_time = time.time()
             send_time = msg.get_double()
-            # print("Player move delay: ", cur_time - send_time, " s")
+            # if should_post:
+            #     print("Player move delay: ", cur_time - send_time, " s")
+            #     print("AI time: ", self.ai_time)
 
         elif msg_id == MessageTypes.MobsMoveTo.value:
             num_mob_move_updates = msg.get_int()
@@ -181,7 +186,7 @@ class ClientMain:
                 y_mt = msg.get_float()
                 x_p = msg.get_float()
                 y_p = msg.get_float()
-                mob = self.mob_list[mob_id]
+                mob = self.mob_dict[mob_id]
                 mob.position = np.array([x_p, y_p])
                 mob.set_move_to(np.array([x_mt, y_mt]))
                 mob.update_front()
@@ -199,7 +204,7 @@ class ClientMain:
                 cast_pos = np.array([player_x, player_y])
                 front = g.new_front(np.array([mouse_x, mouse_y]), cast_pos)
                 fireball = Fireball(cast_time, player_id, cast_pos, front)
-                self.projectile_list[(cast_time, player_id)] = fireball
+                self.projectile_dict[(cast_time, player_id)] = fireball
 
             elif spell_id == SpellTypes.BurningGround.value:
                 cast_time = msg.get_double()
@@ -207,7 +212,7 @@ class ClientMain:
                 y_p = msg.get_float()
                 cast_pos = np.array([x_p, y_p])
                 burn_ground = BurnGround(player_id, cast_pos, cast_time)
-                self.aoe_list[(cast_time, player_id)] = burn_ground
+                self.aoe_dict[(cast_time, player_id)] = burn_ground
 
             elif spell_id == SpellTypes.HolyGround.value:
                 cast_time = msg.get_double()
@@ -215,7 +220,7 @@ class ClientMain:
                 y_p = msg.get_float()
                 cast_pos = np.array([x_p, y_p])
                 holy_ground = HolyGround(player_id, cast_pos, cast_time)
-                self.aoe_list[(cast_time, player_id)] = holy_ground
+                self.aoe_dict[(cast_time, player_id)] = holy_ground
 
             elif spell_id == SpellTypes.Knockback.value:
                 pass
@@ -262,12 +267,12 @@ class ClientMain:
                 for i in range(object_num):
                     owner = msg.get_string()
                     cast_time = msg.get_double()
-                    self.projectile_list.pop((cast_time, owner))
+                    self.projectile_dict.pop((cast_time, owner))
             elif object_id == ObjectIds.Aoe.value:
                 for i in range(object_num):
                     owner = msg.get_string()
                     cast_time = msg.get_double()
-                    self.aoe_list.pop((cast_time, owner))
+                    self.aoe_dict.pop((cast_time, owner))
             elif object_id == ObjectIds.HealPlace.value:
                 h_p_id = msg.get_int()
                 for heal_place in self.heal_place_list:
@@ -275,26 +280,16 @@ class ClientMain:
                         heal_place.use()
 
         elif msg_id == MessageTypes.UpdateHealth.value:
-            msg_data = msg.get_body_as_string().split("\n\n")
-            player_data = msg_data[0].split('\n')
-            mob_data = msg_data[1].split('\n')
-            for data in player_data[1:]:
-                d = data.split(':')
-                player_id = d[0]
-                player_hp = int(d[1])
-                if player_id == self.player.player_id:
-                    self.player.update_health(player_hp)
-                    break
-                else:
-                    for enemy in self.enemy_list:
-                        if enemy.player_id == player_id:
-                            enemy.update_health(player_hp)
-                            break
-            for data in mob_data[1:]:
-                d = data.split(':')
-                mob_id = int(d[0])
-                mob_hp = int(d[1])
-                self.mob_list[mob_id].update_health(mob_hp)
+            player_num = msg.get_int()
+            for i in range(player_num):
+                player_id = msg.get_string()
+                player_hp = msg.get_int()
+                self.player_dict[player_id].update_health(player_hp)
+            mob_num = msg.get_int()
+            for i in range(mob_num):
+                mob_id = msg.get_int()
+                mob_hp = msg.get_int()
+                self.mob_dict[mob_id].update_health(mob_hp)
 
         elif msg_id == MessageTypes.MobsKilled.value:
             num_mobs_killed = msg.get_int()
@@ -304,6 +299,7 @@ class ClientMain:
                 self.mob_kill(killer_id, mob_id)
 
         elif msg_id == MessageTypes.StartGame.value:
+            self.start_game_callback()
             self.start_game = True
 
         elif msg_id == MessageTypes.ResetMap.value:
@@ -321,16 +317,21 @@ class ClientMain:
         # AI client messages
         self.process_agent_message(msg_id, msg)
 
+    def start_game_callback(self):
+        pass
+
     def process_agent_message(self, msg_id, msg):
         pass
 
+    def agent_mob_kill(self, killer_id, is_lvl_up):
+        pass
+
     def map_reset_callback(self, msg):
-        self.projectile_list.clear()
-        self.aoe_list.clear()
-        self.player.reset_stats()
-        for enemy in self.enemy_list:
-            enemy.reset_stats()
-        self.mob_list.clear()
+        self.projectile_dict.clear()
+        self.aoe_dict.clear()
+        for player in self.player_dict.values():
+            player.reset_stats()
+        self.mob_dict.clear()
         self.obstacle_list.clear()
         self.heal_place_list.clear()
 
@@ -339,12 +340,7 @@ class ClientMain:
             player_id = msg.get_string()
             player_pos_x = msg.get_float()
             player_pos_y = msg.get_float()
-            if player_id == self.player.player_id:
-                self.player.change_position(np.array([player_pos_x, player_pos_y]))
-            else:
-                for enemy in self.enemy_list:
-                    if enemy.player_id == player_id:
-                        enemy.change_position(np.array([player_pos_x, player_pos_y]))
+            self.player_dict[player_id].change_position(np.array([player_pos_x, player_pos_y]))
 
         mob_count = msg.get_int()
         for i in range(mob_count):
@@ -353,7 +349,7 @@ class ClientMain:
             mob_pos_y = msg.get_float()
             new_mob = Mob(mob_id)
             new_mob.change_position(np.array([mob_pos_x, mob_pos_y]))
-            self.mob_list[new_mob.mob_id] = new_mob
+            self.mob_dict[new_mob.mob_id] = new_mob
 
         obs_count = msg.get_int()
         for i in range(obs_count):
@@ -375,7 +371,7 @@ class ClientMain:
         self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
 
     def pause_loop(self, game_over=False, loser_id=""):
-        if loser_id == self.player.player_id:
+        if loser_id == self.user_player.player_id:
             print("You lost!")
         else:
             print("You won!")
@@ -421,8 +417,8 @@ class ClientMain:
 
     def cast_1(self, mouse_x, mouse_y):
         cur_time = time.time()
-        if (cur_time - self.player.cd_1_start) > SpellCooldowns.Fireball:
-            self.player.cd_1_start = cur_time
+        if (cur_time - self.user_player.cd_1_start) > SpellCooldowns.Fireball:
+            self.user_player.cd_1_start = cur_time
             # We don't care about client delay so unused
             # fireball = Fireball(cur_time, self.player_id, self.player.position, front)
             # self.projectile_list.append(fireball)
@@ -440,8 +436,8 @@ class ClientMain:
 
     def cast_2(self, mouse_x, mouse_y):
         cur_time = time.time()
-        if (cur_time - self.player.cd_2_start) > SpellCooldowns.BurnGround:
-            self.player.cd_2_start = cur_time
+        if (cur_time - self.user_player.cd_2_start) > SpellCooldowns.BurnGround:
+            self.user_player.cd_2_start = cur_time
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
             msg.push_int(SpellTypes.BurningGround.value)
@@ -452,8 +448,8 @@ class ClientMain:
 
     def cast_3(self, mouse_x, mouse_y):
         cur_time = time.time()
-        if (cur_time - self.player.cd_3_start) > SpellCooldowns.HolyGround:
-            self.player.cd_3_start = cur_time
+        if (cur_time - self.user_player.cd_3_start) > SpellCooldowns.HolyGround:
+            self.user_player.cd_3_start = cur_time
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
             msg.push_int(SpellTypes.HolyGround.value)
@@ -464,12 +460,12 @@ class ClientMain:
 
     def cast_4(self, x, y):
         cur_time = time.time()
-        if (cur_time - self.player.cd_4_start) > SpellCooldowns.Knockback:
-            self.player.cd_4_start = cur_time
-            self.player.set_move_to(self.player.position)
-            self.player.is_standing = True
+        if (cur_time - self.user_player.cd_4_start) > SpellCooldowns.Knockback:
+            self.user_player.cd_4_start = cur_time
+            self.user_player.set_move_to(self.user_player.position)
+            self.user_player.is_standing = True
             new_pos = np.array([float(x), float(y)])
-            self.player.front = g.new_front(new_pos, self.player.position)
+            self.user_player.front = g.new_front(new_pos, self.user_player.position)
             # for enemy in self.enemy_list:
             #    if cone_hit_detection(self.player.position, self.player.front,
             #                          angle=60, radius=100, point_to_check=enemy.position):
@@ -477,19 +473,14 @@ class ClientMain:
 
             msg_body = str(SpellTypes.Knockback.value)
             # msg_body += ';' + str(cur_time)  # no game object no id/cast_time required
-            msg_body += ';' + str(self.player.front[0]) + ',' + str(self.player.front[1])
+            msg_body += ';' + str(self.user_player.front[0]) + ',' + str(self.user_player.front[1])
             # Like with projectiles here either this position or the server-side position can be used.
             self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def mob_kill(self, killer_id, mob_id):
-        self.mob_list.pop(mob_id)
-        if killer_id == self.player.player_id:
-            self.player.gain_exp(20)
-            return
-        for enemy in self.enemy_list:
-            if enemy.player_id == killer_id:
-                enemy.gain_exp(20)
-                break
+        self.mob_dict.pop(mob_id)
+        is_lvl_up = self.player_dict[killer_id].gain_exp(MOB_KILL_XP_GAIN)
+        self.agent_mob_kill(killer_id, is_lvl_up)
 
     def game_loop(self):
         cur_frame = time.time()
@@ -515,18 +506,16 @@ class ClientMain:
             heal_place.on_update(delta_t)
 
         for obs in self.obstacle_list:
-            c_entity_c_static(self.player, obs)
-            for enemy in self.enemy_list:
-                c_entity_c_static(enemy, obs)
-            for mob in self.mob_list.values():
+            for player in self.player_dict.values():
+                c_entity_c_static(player, obs)
+            for mob in self.mob_dict.values():
                 c_entity_c_static(mob, obs)
 
-        self.player.on_update(delta_t)
-        for enemy in self.enemy_list:
-            enemy.on_update(delta_t)
-        for mob in self.mob_list.values():
+        for player in self.player_dict.values():
+            player.on_update(delta_t)
+        for mob in self.mob_dict.values():
             mob.on_update(delta_t)
-        for proj in self.projectile_list.values():
+        for proj in self.projectile_dict.values():
             proj.on_update(delta_t)
 
 

@@ -23,8 +23,8 @@ class ServerMain:
         self.OBSTACLE_COUNT = 4
 
         self.net_server = net.Server(self.process_message, self.connection_lost)
-        self.player_list = []
-        self.mob_list = {}
+        self.player_dict = {}
+        self.mob_dict = {}
         self.obstacle_list = []
         self.heal_place_list = []
         self.projectile_list = []
@@ -37,6 +37,9 @@ class ServerMain:
         self.client_ready_counter = 0
         self.is_paused = False
         self.is_shutdown = False
+
+        # For machine learning
+        self.optimizer_socket = None
 
     def start(self):
         self.net_server.start()
@@ -101,63 +104,65 @@ class ServerMain:
                 self.pause_loop()
 
         elif msg_id == MessageTypes.TransitionData.value:
-            self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransitionData.value, msg.body)
+            self.net_server.send_message(self.optimizer_socket, MessageTypes.TransitionData.value, msg.body)
 
         elif msg_id == MessageTypes.TransferDone.value:
-            self.net_server.send_message(self.player_list[0].sock, MessageTypes.TransferDone.value, msg.body)
+            self.net_server.send_message(self.optimizer_socket, MessageTypes.TransferDone.value, msg.body)
 
         elif msg_id == MessageTypes.OptimizeDone.value:
-            self.net_server.message_all_but_one(self.player_list[0].sock, MessageTypes.OptimizeDone.value, msg.body)
+            self.net_server.message_all_but_one(self.optimizer_socket, MessageTypes.OptimizeDone.value, msg.body)
 
     def connection_lost(self, sock):
         player = self.get_player_for_socket(sock)
-        if player in self.player_list:
-            self.player_list.remove(player)
+        if player in self.player_dict.values():
+            self.player_dict.pop(player.player_id)
 
     def map_reset(self):
         self.projectile_list.clear()
         self.aoe_list.clear()
-        for player in self.player_list:
+        for player in self.player_dict.values():
             player.reset_stats()
-        self.mob_list.clear()
+        self.mob_dict.clear()
         self.obstacle_list.clear()
         self.heal_place_list.clear()
-        for i in range(len(self.player_list)):
+        i = 0
+        for player in self.player_dict.values():
             pos_x = 50.0 + 900 * (i % 2)
             pos_y = 400.0
-            self.player_list[i].change_position(np.array([pos_x, pos_y]))
+            i += 1
+            player.change_position(np.array([pos_x, pos_y]))
         for i in range(self.MOB_COUNT):
             mob = Mob(i)
-            x = random.randint(150, 850)
-            y = random.randint(100, 700)
+            x = random.randint(MOB_SPAWN_X_MIN, MOB_SPAWN_X_MAX)
+            y = random.randint(MOB_SPAWN_Y_MIN, MOB_SPAWN_Y_MAX)
             mob.change_position(np.array([float(x), float(y)]))
-            self.mob_list[i] = mob
+            self.mob_dict[i] = mob
         for i in range(self.OBSTACLE_COUNT):
             obstacle = CircleObstacle()
-            x = random.randint(100, 900)
-            y = random.randint(100, 700)
+            x = random.randint(OBSTACLE_X_MIN, OBSTACLE_X_MAX)
+            y = random.randint(OBSTACLE_Y_MIN, OBSTACLE_Y_MAX)
             obstacle.position = np.array([float(x), float(y)])
             self.obstacle_list.append(obstacle)
         heal_place1 = HealPlace(1)
-        heal_place1.position = np.array([500, 700])
+        heal_place1.position = HEAL_PLACE_SPAWN_1
         self.heal_place_list.append(heal_place1)
         heal_place2 = HealPlace(2)
-        heal_place2.position = np.array([500, 100])
+        heal_place2.position = HEAL_PLACE_SPAWN_2
         self.heal_place_list.append(heal_place2)
 
         self.client_ready_counter = 0
 
     def create_map_reset_msg(self):
         msg_body = b''
-        msg_body += struct.pack("!i", len(self.player_list))
-        for player in self.player_list:
+        msg_body += struct.pack("!i", len(self.player_dict))
+        for player in self.player_dict.values():
             length = struct.pack("!i", len(player.player_id))
             msg_body += length
             msg_body += player.player_id.encode("utf-8")
             msg_body += struct.pack("!f", player.position[0])
             msg_body += struct.pack("!f", player.position[1])
-        msg_body += struct.pack("!i", len(self.mob_list))
-        for mob in self.mob_list.values():
+        msg_body += struct.pack("!i", len(self.mob_dict))
+        for mob in self.mob_dict.values():
             msg_body += struct.pack("!i", mob.mob_id)
             msg_body += struct.pack("!f", mob.position[0])
             msg_body += struct.pack("!f", mob.position[1])
@@ -175,19 +180,21 @@ class ServerMain:
     def client_authentication(self, sock, client_id):
         msg_to_send = ""
         new_player = AuthenticatedClient(sock, client_id)
-        if len(self.player_list) % 2 == 0:
+        if len(self.player_dict) == 0:
+            self.optimizer_socket = sock
+        if len(self.player_dict) % 2 == 0:
             new_player.change_position(np.array([50.0, 400.0]))
         else:
             new_player.change_position(np.array([950.0, 400.0]))
         position_string = str(new_player.position[0]) + ',' + str(new_player.position[1])
         msg_to_send += position_string
         msg_to_send += "\n\n"
-        for player in self.player_list:
+        for player in self.player_dict.values():
             msg_to_send += '\n' + player.player_id + ':' + str(player.position[0]) + ',' + str(player.position[1])
             msg_to_send += ';' + str(player.move_to[0]) + ',' + str(player.move_to[1])
-        self.player_list.append(new_player)
+        self.player_dict[client_id] = new_player
         msg_to_send += "\n\n"
-        for mob in self.mob_list.values():
+        for mob in self.mob_dict.values():
             msg_to_send += '\n' + str(mob.mob_id) + ':' + str(mob.position[0]) + ',' + str(mob.position[1])
             msg_to_send += ';' + str(mob.move_to[0]) + ',' + str(mob.move_to[1])
         msg_to_send += "\n\n"
@@ -197,7 +204,7 @@ class ServerMain:
         for h_place in self.heal_place_list:
             msg_to_send += '\n' + str(h_place.id) + ':' + str(h_place.position[0]) + ',' + str(h_place.position[1])
         msg_to_send += "\n\n"
-        if not len(self.player_list) > 1:
+        if not len(self.player_dict) > 1:
             msg_to_send += "1"
         else:
             msg_to_send += "0"
@@ -206,13 +213,8 @@ class ServerMain:
         self.net_server.message_all_but_one(sock, MessageTypes.NewPlayer.value, msg_to_others, True)
 
     def get_player_for_socket(self, sock):
-        for player in self.player_list:
+        for player in self.player_dict.values():
             if player.sock == sock:
-                return player
-
-    def get_player_for_id(self, player_id):
-        for player in self.player_list:
-            if player.player_id == player_id:
                 return player
 
     def cast_spell(self, sock, msg):
@@ -331,9 +333,9 @@ class ServerMain:
 
         self.net_server.process_all_messages()
         self.detect_collisions(cur_frame)
-        for player in self.player_list:
+        for player in self.player_dict.values():
             player.on_update(self.delta_t)
-        for mob in self.mob_list.values():
+        for mob in self.mob_dict.values():
             mob.on_update(self.delta_t)
         self.net_server.send_updates()
 
@@ -341,21 +343,24 @@ class ServerMain:
         player_hp_update_list = []
         mob_hp_update_list = []
         proj_remove_list = []
-        mobs_killed_dict = {}
+        mobs_killed_dict = {}  # key, value = mob_id, killer_id
+        damage_deal_list = []  # Tuple(dealer_type_id, dmg_dealer, taker_type_id, dmg_taker, amount)
+        hp_gain_list = []  # Tuple(player, amount)
 
         self.mob_aggro_timer += self.delta_t
         if self.mob_aggro_timer > 0.2:
             self.mob_aggro_timer = 0
-            players_hit = self.mob_detect()
+            players_hit = self.mob_detect(damage_deal_list)
             player_hp_update_list.extend(players_hit)
 
         for proj in self.projectile_list:
             proj.on_update(self.delta_t)
-            self.check_projectile(proj, player_hp_update_list, mob_hp_update_list, proj_remove_list, mobs_killed_dict)
+            self.check_projectile(proj, player_hp_update_list, mob_hp_update_list, proj_remove_list,
+                                  mobs_killed_dict, damage_deal_list)
         if len(proj_remove_list) > 0:
             msg = Message()
             msg.set_header_by_id(MessageTypes.RemoveGameObject.value)
-            msg.push_int(casting.ObjectIds.Projectile.value)
+            msg.push_int(ObjectIds.Projectile.value)
             msg.push_int(len(proj_remove_list))
             for proj in proj_remove_list:
                 msg.push_string(proj.owner)
@@ -372,21 +377,26 @@ class ServerMain:
                 if time_on > aoe.counter:
                     aoe.counter += 1
                     if aoe.beneficial:
-                        for player in self.player_list:
+                        for player in self.player_dict.values():
                             if aoe.owner == player.player_id:
                                 if c2c_hit_detection(player.position, aoe.position, player.radius, aoe.radius):
                                     player.update_health(player.health + int(aoe.health_modifier))
+                                    hp_gain_list.append((aoe.owner, int(aoe.health_modifier)))
                                     if player not in player_hp_update_list:
                                         player_hp_update_list.append(player)
                     else:
-                        for player in self.player_list:
+                        for player in self.player_dict.values():
                             if not aoe.owner == player.player_id:
                                 if c2c_hit_detection(player.position, aoe.position, player.radius, aoe.radius):
                                     player.update_health(player.health + int(aoe.health_modifier))
+                                    damage_deal_list.append((ObjectIds.Player.value, aoe.owner,
+                                                             ObjectIds.Player.value, player, int(aoe.health_modifier)))
                                     if player not in player_hp_update_list:
                                         player_hp_update_list.append(player)
-                        for mob in self.mob_list.values():
+                        for mob in self.mob_dict.values():
                             if c2c_hit_detection(mob.position, aoe.position, mob.radius, aoe.radius):
+                                damage_deal_list.append((ObjectIds.Player.value, aoe.owner,
+                                                         ObjectIds.Mob.value, mob, int(aoe.health_modifier)))
                                 if not mob.update_health(mob.health + int(aoe.health_modifier)):
                                     if mob not in mob_hp_update_list:
                                         mob_hp_update_list.append(mob)
@@ -396,7 +406,7 @@ class ServerMain:
         if len(aoe_remove_list) > 0:
             msg = Message()
             msg.set_header_by_id(MessageTypes.RemoveGameObject.value)
-            msg.push_int(casting.ObjectIds.Aoe.value)
+            msg.push_int(ObjectIds.Aoe.value)
             msg.push_int(len(aoe_remove_list))
             for aoe in aoe_remove_list:
                 msg.push_string(aoe.owner)
@@ -405,72 +415,98 @@ class ServerMain:
             self.net_server.complete_message_all(msg)
 
         for heal_place in self.heal_place_list:
-            for player in self.player_list:
+            for player in self.player_dict.values():
                 if c2r_hit_detection(player.position, player.radius,
                                      heal_place.position, heal_place.ver_len, heal_place.hor_len):
                     cur_frame = time.time()
                     if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
                         heal_place.cd_start = cur_frame
-                        player.gain_health(10)
+                        player.gain_health(HEAL_PLACE_HP_GAIN)
+                        hp_gain_list.append((player.player_id, HEAL_PLACE_HP_GAIN))
                         if player not in player_hp_update_list:
                             player_hp_update_list.append(player)
                         msg = Message()
                         msg.set_header_by_id(MessageTypes.RemoveGameObject.value)
-                        msg.push_int(casting.ObjectIds.HealPlace.value)
+                        msg.push_int(ObjectIds.HealPlace.value)
                         msg.push_int(1)
                         msg.push_int(heal_place.id)
                         self.net_server.complete_message_all(msg)
 
+        for obs in self.obstacle_list:
+            for player in self.player_dict.values():
+                c_entity_c_static(player, obs)
+            for mob in self.mob_dict.values():
+                c_entity_c_static(mob, obs)
+
         if len(player_hp_update_list) > 0 or len(mob_hp_update_list) > 0:
-            msg_body = ""
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.UpdateHealth.value)
+            msg.push_int(len(player_hp_update_list))
             for player in player_hp_update_list:
-                msg_body += '\n' + player.player_id + ':' + str(player.health)
-            msg_body += "\n\n"
+                msg.push_string(player.player_id)
+                msg.push_int(player.health)
+            msg.push_int(len(mob_hp_update_list))
             for mob in mob_hp_update_list:
-                msg_body += '\n' + str(mob.mob_id) + ':' + str(mob.health)
-            self.net_server.message_all(MessageTypes.UpdateHealth.value, msg_body, True)
+                msg.push_int(mob.mob_id)
+                msg.push_int(mob.health)
+            self.net_server.complete_message_all(msg)
 
         if len(mobs_killed_dict) > 0:
             msg = Message()
             msg.set_header_by_id(MessageTypes.MobsKilled.value)
             msg.push_int(len(mobs_killed_dict))
             for mob_id, killer in mobs_killed_dict.items():
-                self.mob_list.pop(mob_id)
-                for player in self.player_list:
+                self.mob_dict.pop(mob_id)
+                for player in self.player_dict.values():
                     if player.player_id == killer:
-                        player.gain_exp(20)
+                        player.gain_exp(MOB_KILL_XP_GAIN)
                 msg.push_string(killer)
                 msg.push_int(mob_id)
             self.net_server.complete_message_all(msg)
 
-        for obs in self.obstacle_list:
-            for player in self.player_list:
-                c_entity_c_static(player, obs)
-            for mob in self.mob_list.values():
-                c_entity_c_static(mob, obs)
+        if len(damage_deal_list) > 0 or len(hp_gain_list) > 0:
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.DetailedHpChange.value)
+            msg.push_int(len(damage_deal_list))
+            for dd_tuple in damage_deal_list:
+                msg.push_int(dd_tuple[0])
+                msg.push_string(str(dd_tuple[1]))
+                msg.push_int(dd_tuple[2])
+                msg.push_string(str(dd_tuple[3]))
+                msg.push_int(dd_tuple[4])
+            msg.push_int(len(hp_gain_list))
+            for hg_tuple in hp_gain_list:
+                msg.push_string(hg_tuple[0])
+                msg.push_int(hg_tuple[1])
+            self.net_server.complete_message_all(msg)
 
         for player in player_hp_update_list:
-            if player.health < 0:
+            if player.health <= 0:
                 self.pause_loop(game_over=True, loser_id=player.player_id)
 
-    def check_projectile(self, proj, player_hp_update_list, mob_hp_update_list, proj_remove_list, mobs_killed_dict):
+    def check_projectile(self, proj, player_hp_update_list, mob_hp_update_list, proj_remove_list,
+                         mobs_killed_dict, damage_deal_list):
         if proj.position[0] < MAP_X_MIN or proj.position[0] > MAP_X_MAX or \
                 proj.position[1] < MAP_Y_MIN or proj.position[1] > MAP_Y_MAX:
             if proj not in proj_remove_list:
                 proj_remove_list.append(proj)
             return
-        for player in self.player_list:
+        for player in self.player_dict.values():
             if not proj.owner == player.player_id:
                 if c2c_hit_detection(player.position, proj.position, player.radius, proj.radius):
                     proj_remove_list.append(proj)
                     player.lose_health(int(proj.damage))
+                    damage_deal_list.append((ObjectIds.Player.value, proj.owner,
+                                             ObjectIds.Player.value, player, int(proj.damage)))
                     if player not in player_hp_update_list:
                         player_hp_update_list.append(player)
                     return
-        for mob in self.mob_list.values():
+        for mob in self.mob_dict.values():
             if c2c_hit_detection(mob.position, proj.position, mob.radius, proj.radius):
                 if proj not in proj_remove_list:
                     proj_remove_list.append(proj)
+                damage_deal_list.append((ObjectIds.Player.value, proj.owner,
+                                         ObjectIds.Mob.value, mob.mob_id, int(proj.damage)))
                 if not mob.lose_health(int(proj.damage)):
                     mob_hp_update_list.append(mob)
                 else:
@@ -484,11 +520,11 @@ class ServerMain:
                     proj_remove_list.append(proj)
                 return
 
-    def mob_detect(self):
+    def mob_detect(self, damage_deal_list):
         mob_move_list = []
         players_hit = []
-        for mob in self.mob_list.values():
-            for player in self.player_list:
+        for mob in self.mob_dict.values():
+            for player in self.player_dict.values():
                 if c2c_hit_detection(player.position, mob.position, player.radius, mob.detect_range):
                     if c2c_hit_detection(player.position, mob.position, player.radius, mob.attack_range):
                         cur_time = time.time()
@@ -496,6 +532,9 @@ class ServerMain:
                             mob.attack_cd_start = cur_time
                             player.lose_health(mob.attack_damage)
                             players_hit.append(player)
+                            damage_deal_list.append((ObjectIds.Mob.value, mob.mob_id,
+                                                     ObjectIds.Player.value, player.player_id,
+                                                     mob.attack_damage))
                     else:
                         mob.move_to = player.position
                         mob.update_front()

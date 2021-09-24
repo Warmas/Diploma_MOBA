@@ -26,7 +26,7 @@ class Renderer:
                  is_displayed,
                  main_loop_function,
                  keyboard_callback, mouse_callback,
-                 player, enemy_list, mob_list, obstacle_list, heal_place_list,
+                 player, player_dict, mob_dict, obstacle_list, heal_place_list,
                  projectile_list, aoe_list):
         self.is_displayed = is_displayed
         self.main_loop_function = main_loop_function
@@ -52,8 +52,8 @@ class Renderer:
             glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
         self.user_player = player
-        self.enemy_list = enemy_list
-        self.mob_list = mob_list
+        self.player_dict = player_dict
+        self.mob_dict = mob_dict
         self.obstacle_list = obstacle_list
         self.heal_place_list = heal_place_list
         self.projectile_list = projectile_list
@@ -182,12 +182,13 @@ class Renderer:
             self.draw_obstacle(obs)
         for h_p in self.heal_place_list:
             self.draw_healplace(h_p)
-        for mob in self.mob_list.values():
+        for mob in self.mob_dict.values():
             self.draw_mob(mob)
         # self.draw_mobs()
         self.draw_user_player()
-        for enemy in self.enemy_list:
-            self.draw_enemy_player(enemy)
+        for enemy in self.player_dict.values():
+            if not enemy.player_id == self.user_player.player_id:
+                self.draw_enemy_player(enemy)
         for projectile in self.projectile_list.values():
             self.draw_fireball(projectile)
         if self.is_displayed:

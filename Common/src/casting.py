@@ -8,12 +8,6 @@ class SpellTypes(Enum):
     Knockback = 4
 
 
-class ObjectIds(Enum):
-    Projectile = 1
-    Aoe = 2
-    HealPlace = 3
-
-
 class SpellCooldowns:
     Fireball = 0.5
     BurnGround = 10

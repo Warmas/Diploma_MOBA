@@ -18,21 +18,14 @@ class MyClass:
         self.asd = 1
         self.asd2 = 2
 
-
-def asd(mybytes, num):
-    mybytes += num
-
-
-class Net(nn.Module):
+class MyClass2:
     def __init__(self):
-        super(Net, self).__init__()
-        self.linear = nn.Sequential(nn.Linear(1, 4))
-
-    def forward(self, num):
-        return self.linear(num)
-
+        self.asd = 3
 
 if __name__ == '__main__':
-    asd = 1
-    asd2 = "1"
-    print(asd == asd2)
+    asd = MyClass()
+    asd2 = MyClass2()
+    asd.asd = asd2.asd
+    asd2.asd = 4
+    print(asd.asd)
+
