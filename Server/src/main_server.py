@@ -104,7 +104,7 @@ class ServerMain:
                 self.pause_loop()
 
         elif msg_id == MessageTypes.TransitionData.value:
-            self.net_server.send_message(self.optimizer_socket, MessageTypes.TransitionData.value, msg.body)
+            self.net_server.send_complete_message(self.optimizer_socket, msg)
 
         elif msg_id == MessageTypes.TransferDone.value:
             self.net_server.send_message(self.optimizer_socket, MessageTypes.TransferDone.value, msg.body)

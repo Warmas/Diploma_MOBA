@@ -98,7 +98,7 @@ class PpoActorCritic:
                                       n_disc_act, n_cont_act).to(self.device)
 
     def save_brain(self, name="", root_path=""):
-        if not len(name):
+        if len(name):
             path = root_path + name + ".pth"
         else:
             path = root_path + str(time.time())[:10] + ".pth"

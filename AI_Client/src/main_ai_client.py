@@ -4,13 +4,15 @@ import struct
 import torch
 import numpy as np
 
-from Client.src.main_client import ClientMain, MessageTypes
+from Client.src.main_client import ClientMain, MessageTypes, Message
 from Common.src.game_constants import *
 from AI_Client.src.agent.ppo_agent import PpoActorCritic
 from AI_Client.src.agent.ppo_trainer import PpoTrainer
 from AI_Client.src.agent.env_globals import *
 from AI_Client.src.agent.reward_constants import *
 from OpenGL.GLUT import *
+from PIL import Image
+import io
 
 
 # Designed for handling 2 players
@@ -27,7 +29,7 @@ class AiClientMain(ClientMain):
         self.device = None
         self.agent_trainer = None
         agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
-        self.agent_weight_path_root = agent_weight_path_root + weight_file
+        self.AGENT_WEIGHT_PATH_ROOT = agent_weight_path_root
 
         if torch.cuda.is_available():
             print("Using cuda")
@@ -37,12 +39,12 @@ class AiClientMain(ClientMain):
             self.device = "cpu"
         self.agent = PpoActorCritic(self.device)
         if not self.is_training:
-            self.agent.load_brain_weights(self.agent_weight_path_root)
-            print("Loaded weights from path: ", self.agent_weight_path_root)
+            self.agent.load_brain_weights(self.AGENT_WEIGHT_PATH_ROOT + weight_file)
+            print("Loaded weights from path: ", self.AGENT_WEIGHT_PATH_ROOT + weight_file)
         else:
             if is_load_weights:
-                self.agent.load_brain_weights(self.agent_weight_path_root)
-                print("Loaded weights from path: ", self.agent_weight_path_root)
+                self.agent.load_brain_weights(self.AGENT_WEIGHT_PATH_ROOT + weight_file)
+                print("Loaded weights from path: ", self.AGENT_WEIGHT_PATH_ROOT + weight_file)
             self.agent_trainer = PpoTrainer(self.device, self.agent)
 
         self.steps_done = 0
@@ -57,7 +59,7 @@ class AiClientMain(ClientMain):
 
     def process_agent_message(self, msg_id, msg):
         if msg_id == MessageTypes.TransitionData.value:
-            self.transition_data_process(msg.body)
+            self.transition_data_process(msg)
 
         elif msg_id == MessageTypes.TransferDone.value:
             self.transfer_done_callback()
@@ -111,36 +113,89 @@ class AiClientMain(ClientMain):
             if not self.is_first_player:
                 if not started_transfer:
                     started_transfer = True
+                    print("Transfering transitions...")
                     self.do_transfer()
-                    print("Finished transfer")
         self.is_paused = False
         self.last_frame = time.time()
         print("Continuing game!")
 
     def do_transfer(self):
+        # msg = Message()
+        # msg.set_header_by_id(MessageTypes.TransitionData.value)
+        # msg.push_int(len(self.agent_trainer.memory))
+        # for trans_n in range(len(self.agent_trainer.memory)):
+        #     transition = self.agent_trainer.memory.get_transition(trans_n)
+        #     msg.push_int(trans_n)
+        #     msg.push_int(transition.disc_action)
+        #     msg.push_float(transition.reward)
+        #     msg.push_float(transition.act_prob.disc_act_prob)
+        #     msg.push_float(transition.act_prob.mouse_x_prob)
+        #     msg.push_float(transition.act_prob.mouse_y_prob)
+        #     image_bytes = transition.state[0].tobytes()
+        #     msg.push_int(len(image_bytes))
+        #     msg.push_bytes(image_bytes)
+        # self.net_client.send_complete_message(msg)
         for trans_n in range(len(self.agent_trainer.memory)):
             transition = self.agent_trainer.memory.get_transition(trans_n)
-            msg_body = struct.pack("!i", trans_n)
-            msg_body += struct.pack("!i", transition.disc_action)
-            msg_body += struct.pack("!f", transition.reward)
-            msg_body += struct.pack("!f", transition.act_prob.disc_act_prob)
-            msg_body += struct.pack("!f", transition.act_prob.mouse_x_prob)
-            msg_body += struct.pack("!f", transition.act_prob.mouse_y_prob)
-            msg_body += transition.state[0].tobytes()  # Image data
-            self.net_client.send_message(MessageTypes.TransitionData.value, msg_body)
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.TransitionData.value)
+            msg.push_int(trans_n)
+            msg.push_int(transition.disc_action)
+            msg.push_float(transition.reward)
+            msg.push_float(transition.act_prob.disc_act_prob)
+            msg.push_float(transition.act_prob.mouse_x_prob)
+            msg.push_float(transition.act_prob.mouse_y_prob)
+            image_bytes = transition.state[0].tobytes()
+            image_bytes = Image.frombytes('RGB', (1000, 800), image_bytes)
+
+            buf = io.BytesIO()
+            image_bytes.save(buf, format="PNG")
+            buffer = buf.getvalue()
+            msg.push_int(len(buffer))
+            msg.push_bytes(buffer)
+            # This would be without compression:
+            # msg.push_int(len(image_bytes))
+            # msg.push_bytes(image_bytes)
+
+            self.net_client.send_complete_message(msg)
         self.agent_trainer.clear_memory()
         self.net_client.send_message(MessageTypes.TransferDone.value, b'1')
 
-    def transition_data_process(self, msg_body):
-        tran_n = struct.unpack("!i", msg_body[:4])[0]
-        disc_act = struct.unpack("!i", msg_body[4:8])[0]
-        reward = struct.unpack("!f", msg_body[8:12])[0]
-        disc_act_prob = struct.unpack("!f", msg_body[12:16])[0]
-        mouse_x_prob = struct.unpack("!f", msg_body[16:20])[0]
-        mouse_y_prob = struct.unpack("!f", msg_body[20:24])[0]
-        image = np.frombuffer(msg_body[24:], dtype=np.uint8)
-        act_prob = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)
+    def transition_data_process(self, msg):
+        # num_trans = msg.get_int()
+        # for i in range(num_trans):
+        #     tran_n = msg.get_int()
+        #     disc_act = msg.get_int()
+        #     reward = msg.get_float()
+        #     disc_act_prob = msg.get_float()
+        #     mouse_x_prob = msg.get_float()
+        #     mouse_y_prob = msg.get_float()
+        #     image_byte_size = msg.get_int()
+        #     image = np.frombuffer(msg.get_bytes(image_byte_size), dtype=np.uint8)
 
+        #     act_prob = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)
+        #     tran = Transition(State(image), disc_act, reward, act_prob)
+        #     # If there were more agents each agent's message would include it's number but we only have one.
+        #     self.agent_trainer.memory_list[1].push(tran)
+        #     print("Image received: ", tran_n)
+        tran_n = msg.get_int()
+        disc_act = msg.get_int()
+        reward = msg.get_float()
+        disc_act_prob = msg.get_float()
+        mouse_x_prob = msg.get_float()
+        mouse_y_prob = msg.get_float()
+        image_byte_size = msg.get_int()
+        image_bytes = msg.get_bytes(image_byte_size)
+
+        buf = io.BytesIO(image_bytes)
+        image = Image.open(buf)
+        image = np.array(image)
+        image = np.transpose(image, (2, 0, 1))
+        image = image.flatten()
+        # This would be without compression:
+        # image = np.frombuffer(msg.get_bytes(image_byte_size), dtype=np.uint8)
+
+        act_prob = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)
         tran = Transition(State(image), disc_act, reward, act_prob)
         # If there were more agents each agent's message would include it's number but we only have one.
         self.agent_trainer.memory_list[1].push(tran)
@@ -159,28 +214,29 @@ class AiClientMain(ClientMain):
               "\n\nDiscrete entropy loss:", disc_entropy_loss_list,
               "\n\nContinuous entropy loss:", cont_entropy_loss_list)
         print("Reward sums: ", reward_sum_list)
+        print("Total reward: ", sum(reward_sum_list))
         print("Finished episode: ", self.cur_episode_n)
         self.cur_episode_n += 1
         if self.cur_episode_n < self.MAX_EPISODE_N:
             print("Saving models...")
             # We don't really need checkpoints as we have to save each episode anyway
             if (self.cur_episode_n % self.CHECKPOINT_EP_N) == 0:
-                self.agent.save_brain_weights("temp_agent", self.agent_weight_path_root)
+                self.agent.save_brain_weights("checkpoint_agent_" + str(self.CHECKPOINT_EP_N), self.AGENT_WEIGHT_PATH_ROOT)
             else:
-                self.agent.save_brain_weights("temp_agent", self.agent_weight_path_root)
+                self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
             print("Saved models!")
             self.agent_trainer.clear_memory()
             self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
             self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         else:
             print("Saving final agent...")
-            self.agent.save_brain_weights("final_agent", self.agent_weight_path_root)
+            self.agent.save_brain_weights("final_agent", self.AGENT_WEIGHT_PATH_ROOT)
             print("Saved final agent!")
             self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
 
     def optimize_done_callback(self):
         print("Loading new models...")
-        self.agent.load_brain_weights("temp_agent.pth", self.agent_weight_path_root)
+        self.agent.load_brain_weights("temp_agent.pth", self.AGENT_WEIGHT_PATH_ROOT)
         self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         print("Loaded new models!")
 
@@ -194,10 +250,6 @@ class AiClientMain(ClientMain):
                 self.counter_for_fps = 0
                 print("FPS: ", 1 / delta_t)
                 print("Steps done: ", self.steps_done)
-
-        for heal_place in self.heal_place_list:
-            if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
-                heal_place.available = True
 
         self.process_incoming_messages()
 

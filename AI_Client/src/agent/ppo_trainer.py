@@ -30,7 +30,7 @@ class PpoTrainer:
         self.actor_critic = actor_critic
         self.optimizer = optim.Adam(self.actor_critic.brain.parameters(), self.LR_AGENT)
 
-        self.memory = TrainingMemory(self.MEMORY_CAPACITY)  # ~200 max with all of them on GPU
+        self.memory = TrainingMemory(self.MEMORY_CAPACITY)
         self.memory_list = []
         self.memory_list.append(self.memory)
         # We add memory for each remote agent

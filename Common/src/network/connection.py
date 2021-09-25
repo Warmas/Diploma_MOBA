@@ -34,7 +34,6 @@ class Connection:
 
     def read_header(self, sock):
         header_len = 8
-        msg_header = b''
         try:
             msg_header = sock.recv(header_len)
             if msg_header:

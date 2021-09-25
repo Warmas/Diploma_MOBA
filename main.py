@@ -12,6 +12,7 @@ from torch.distributions import Categorical
 import torch.nn as nn
 import torch.optim as optim
 import argparse
+from PIL import Image
 
 class MyClass:
     def __init__(self):
@@ -23,9 +24,6 @@ class MyClass2:
         self.asd = 3
 
 if __name__ == '__main__':
-    asd = MyClass()
-    asd2 = MyClass2()
-    asd.asd = asd2.asd
-    asd2.asd = 4
-    print(asd.asd)
+    image = Image.open("test_250_200.png")
+
 
