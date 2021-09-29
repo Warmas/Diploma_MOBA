@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 import torch.nn as nn
@@ -15,16 +16,14 @@ class PpoTrainer:
         self.TARGET_UPDATE = 10
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
-        self.LR_ACTOR = 1e-3  # Unused with combined loss
-        self.LR_CRITIC = 3e-3  # Unused with combined loss
         self.CRITIC_DISC_FACTOR = 0.5
         self.DISC_ENTROPY_FACTOR = 0.001
         self.CONT_ENTROPY_FACTOR = 0.001
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2
-        self.MEMORY_CAPACITY = 512  # May be changed depending on RAM.
-        self.BATCH_SIZE = 8  # This increases GPU memory usage, hard to pinpoint good value.
+        self.MEMORY_CAPACITY = 1024  # May be changed depending on RAM.
+        self.BATCH_SIZE = 32  # This increases GPU memory usage, hard to pinpoint good value.
 
         self.device = device
         self.actor_critic = actor_critic
@@ -194,3 +193,15 @@ class PpoTrainer:
     def clear_memory(self):
         for memory in self.memory_list:
             memory.clear_memory()
+
+    def save_optimizer(self, name="", root_path=""):
+        if len(name):
+            path = root_path + name + ".pth"
+        else:
+            path = root_path + str(time.time())[:10] + ".pth"
+        torch.save(self.optimizer.state_dict(), path)
+
+    def load_optimizer(self, name, root_path=""):
+        path = root_path + name
+        self.optimizer.load_state_dict(torch.load(path))
+

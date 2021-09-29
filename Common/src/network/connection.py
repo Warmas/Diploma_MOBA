@@ -18,6 +18,7 @@ class Connection:
         self.error_callback = error_callback
         self.is_read_header_error = False
         self.is_read_body_error = False
+        self.write_message_call_num = 0
 
     def read_message(self, sock):
         if self.is_server:
@@ -65,6 +66,7 @@ class Connection:
             self.error_callback(sock, "Message body read failed.")
 
     def write_message(self):
+        self.write_message_call_num += 1
         msg = self.messages_out.front()
         data = msg.header + msg.body
         # print('Sending to:', msg.socket.getpeername())
@@ -80,11 +82,15 @@ class Connection:
                             # print("Number of bytes sent: ", sent)
                 except Exception:
                     self.error_callback(sock, "Message write failed.")
-                    data = b''
+                    return
         self.messages_out.pop_left()
         if not self.messages_out.empty():
-            self.write_message()
+            if self.write_message_call_num < 50:
+                self.write_message()
+            else:
+                self.write_message_2()
         else:
+            self.write_message_call_num = 0
             self.wm_mutex.acquire()
             self.writing_msg = False
             self.wm_mutex.release()
@@ -92,10 +98,36 @@ class Connection:
     def send_message(self, sock, msg):
         msg = OwnedMessage(sock, msg.header, msg.body)
         self.messages_out.append(msg)
+        self.wm_mutex.acquire()
         if not self.writing_msg:
-            self.wm_mutex.acquire()
             self.writing_msg = True
             self.wm_mutex.release()
             write_thread = threading.Thread(target=self.write_message)
             write_thread.start()
             # self.write_message()
+        else:
+            self.wm_mutex.release()
+
+    def write_message_2(self):
+        while not self.messages_out.empty():
+            msg = self.messages_out.front()
+            data = msg.header + msg.body
+            while len(data) and self.is_connected:
+                events = self.sel.select(timeout=None)
+                for key, mask in events:
+                    sock = key.fileobj
+                    try:
+                        if mask & selectors.EVENT_WRITE:
+                            if sock == msg.socket:
+                                sent = msg.socket.send(data)
+                                data = data[sent:]
+                                # print("Number of bytes sent: ", sent)
+                    except Exception:
+                        self.error_callback(sock, "Message write failed.")
+                        return
+            self.messages_out.pop_left()
+        self.write_message_call_num = 0
+        self.wm_mutex.acquire()
+        self.writing_msg = False
+        self.wm_mutex.release()
+

@@ -8,7 +8,7 @@ class Entity:
         self.max_health = max_health
         self.health = self.max_health
         self.position = np.array([0.0, 0.0])
-        self.move_to = np.array([0.0, 0.0])
+        self.move_to = np.array([0.0, 0.1])
         self.front = g.vec_normalize(np.array([1, 1]))
         self.speed = speed
         self.is_colliding = False

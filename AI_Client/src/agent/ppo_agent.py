@@ -67,7 +67,7 @@ class PpoAgentCriticNn(nn.Module):
     def forward(self, image_t):
         """Requires image as a flattened image tensor."""
         batch_size = image_t.shape[0]
-        image_t = image_t.reshape((batch_size, 3, SCREEN_HEIGHT, SCREEN_WIDTH))
+        image_t = image_t.reshape((batch_size, 3, AGENT_SCR_HEIGHT, AGENT_SCR_WIDTH))
         image_t = image_t / 255
 
         conv_out = self.conv_block(image_t)
@@ -92,10 +92,8 @@ class PpoActorCritic:
     def __init__(self, device):
         # If gpu is to be used
         self.device = device
-        n_disc_act = DISC_ACTION_N
-        n_cont_act = CONT_ACTION_N
-        self.brain = PpoAgentCriticNn(SCREEN_HEIGHT, SCREEN_WIDTH,
-                                      n_disc_act, n_cont_act).to(self.device)
+        self.brain = PpoAgentCriticNn(AGENT_SCR_WIDTH, AGENT_SCR_HEIGHT,
+                                      DISC_ACTION_N, CONT_ACTION_N).to(self.device)
 
     def save_brain(self, name="", root_path=""):
         if len(name):
@@ -111,14 +109,21 @@ class PpoActorCritic:
             path = root_path + str(time.time())[:10] + ".pth"
         torch.save(self.brain.state_dict(), path)
 
-    def load_brain(self, name, root_path=""):
+    def load_brain(self, name, root_path="", is_training=False):
         path = root_path + name
         self.brain = torch.load(path)
+        if not is_training:
+            self.brain.eval()
+        else:
+            self.brain.train()
 
-    def load_brain_weights(self, name, root_path=""):
+    def load_brain_weights(self, name, root_path="", is_training=False):
         path = root_path + name
         self.brain.load_state_dict(torch.load(path))
-        self.brain.eval()
+        if not is_training:
+            self.brain.eval()
+        else:
+            self.brain.train()
 
     def select_action(self, image_t):
         """Requires image as a tensor. Returns namedtuple-s, the first one is the Action, the second one is the
@@ -138,8 +143,8 @@ class PpoActorCritic:
             # Transform continuous values to pixel values
             mouse_x_prob = cont_action[0][0].item()
             mouse_y_prob = cont_action[0][1].item()
-            mouse_x = mouse_x_prob * SCREEN_WIDTH
-            mouse_y = mouse_y_prob * SCREEN_HEIGHT
+            mouse_x = mouse_x_prob * AGENT_SCR_WIDTH
+            mouse_y = mouse_y_prob * AGENT_SCR_HEIGHT
 
             action = Action(disc_action, mouse_x, mouse_y)
             prob_out = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)

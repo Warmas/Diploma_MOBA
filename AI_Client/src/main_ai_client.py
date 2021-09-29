@@ -17,7 +17,7 @@ import io
 
 # Designed for handling 2 players
 class AiClientMain(ClientMain):
-    def __init__(self, player_id, is_training, is_displayed, is_load_weights, weight_file):
+    def __init__(self, player_id, is_training, is_displayed, is_load_weights, weight_file, optimizer_file):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.enemy_player = None
 
@@ -28,8 +28,8 @@ class AiClientMain(ClientMain):
         self.is_training = is_training
         self.device = None
         self.agent_trainer = None
-        agent_weight_path_root = "AI_Client/neural_nets/weights/ppo/"
-        self.AGENT_WEIGHT_PATH_ROOT = agent_weight_path_root
+        self.AGENT_WEIGHT_PATH_ROOT = "AI_Client/neural_nets/weights/ppo/"
+        self.OPTIMIZER_PATH_ROOT = "AI_Client/optimizers/ppo"
 
         if torch.cuda.is_available():
             print("Using cuda")
@@ -43,9 +43,12 @@ class AiClientMain(ClientMain):
             print("Loaded weights from path: ", self.AGENT_WEIGHT_PATH_ROOT + weight_file)
         else:
             if is_load_weights:
-                self.agent.load_brain_weights(self.AGENT_WEIGHT_PATH_ROOT + weight_file)
+                self.agent.load_brain_weights(self.AGENT_WEIGHT_PATH_ROOT + weight_file, is_training=True)
                 print("Loaded weights from path: ", self.AGENT_WEIGHT_PATH_ROOT + weight_file)
             self.agent_trainer = PpoTrainer(self.device, self.agent)
+            if is_load_weights:
+                self.agent_trainer.load_optimizer(self.OPTIMIZER_PATH_ROOT + optimizer_file)
+                print("Loaded optimizer from path: ", self.OPTIMIZER_PATH_ROOT + optimizer_file)
 
         self.steps_done = 0
         self.agent_frame_time = 0
@@ -146,7 +149,7 @@ class AiClientMain(ClientMain):
             msg.push_float(transition.act_prob.mouse_x_prob)
             msg.push_float(transition.act_prob.mouse_y_prob)
             image_bytes = transition.state[0].tobytes()
-            image_bytes = Image.frombytes('RGB', (1000, 800), image_bytes)
+            image_bytes = Image.frombytes('RGB', (AGENT_SCR_WIDTH, AGENT_SCR_HEIGHT), image_bytes)
 
             buf = io.BytesIO()
             image_bytes.save(buf, format="PNG")
@@ -216,14 +219,15 @@ class AiClientMain(ClientMain):
         print("Reward sums: ", reward_sum_list)
         print("Total reward: ", sum(reward_sum_list))
         print("Finished episode: ", self.cur_episode_n)
-        self.cur_episode_n += 1
-        if self.cur_episode_n < self.MAX_EPISODE_N:
+        if self.cur_episode_n <= self.MAX_EPISODE_N:
             print("Saving models...")
             # We don't really need checkpoints as we have to save each episode anyway
+            self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
             if (self.cur_episode_n % self.CHECKPOINT_EP_N) == 0:
-                self.agent.save_brain_weights("checkpoint_agent_" + str(self.CHECKPOINT_EP_N), self.AGENT_WEIGHT_PATH_ROOT)
-            else:
-                self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
+                self.agent.save_brain_weights(
+                    "checkpoint_agent_" + str(self.CHECKPOINT_EP_N), self.AGENT_WEIGHT_PATH_ROOT)
+                self.agent_trainer.save_optimizer(
+                    "checkpoint_optimizer_" + str(self.CHECKPOINT_EP_N), self.OPTIMIZER_PATH_ROOT)
             print("Saved models!")
             self.agent_trainer.clear_memory()
             self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
@@ -233,6 +237,7 @@ class AiClientMain(ClientMain):
             self.agent.save_brain_weights("final_agent", self.AGENT_WEIGHT_PATH_ROOT)
             print("Saved final agent!")
             self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
+        self.cur_episode_n += 1
 
     def optimize_done_callback(self):
         print("Loading new models...")
@@ -264,8 +269,12 @@ class AiClientMain(ClientMain):
         if cur_frame - self.agent_frame_time > self.AGENT_FRAME_DELAY:
             self.agent_frame_time = cur_frame
             image = self.renderer.get_image()
+            image = Image.fromarray(image)
+            image = image.resize((AGENT_SCR_WIDTH, AGENT_SCR_HEIGHT))
+            image = np.array(image)
+
             # Rearrange dimensions because the convolutional layer requires color channel matrices not RGB matrix
-            image = np.transpose(image, (2, 1, 0))
+            image = np.transpose(image, (2, 0, 1))
             image_flatten = image.flatten()
             state = State(image_flatten)
 
@@ -276,17 +285,24 @@ class AiClientMain(ClientMain):
             mouse_x = action.mouse_x
             mouse_y = action.mouse_y
             if action.disc_action == 0:
+                # print("---Choosing 0---")
                 pass
             elif action.disc_action == 1:
                 self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
+                # print("---Choosing 1---")
             elif action.disc_action == 2:
                 self.cast_1(mouse_x, mouse_y)
+                self.cur_reward += TEST_REWARD
+                # print("---Choosing 2---")
             elif action.disc_action == 3:
                 self.cast_2(mouse_x, mouse_y)
+                # print("---Choosing 3---")
             elif action.disc_action == 4:
                 self.cast_3(mouse_x, mouse_y)
+                # print("---Choosing 4---")
             elif action.disc_action == 5:
                 self.cast_4(mouse_x, mouse_y)
+                # print("---Choosing 5---")
 
             if self.is_training:
                 self.steps_done += 1
@@ -301,12 +317,12 @@ class AiClientMain(ClientMain):
             # print("AI time: ", aft_ai - aft_render)
         else:
             pass
-            #self.ai_time = 0
+            # self.ai_time = 0
 
 
 def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True,
-                    is_load_weights=True, weight_file="last_agent_weight.pth"):
+                    is_load_weights=True, weight_file="last_agent_weight.pth", optimizer_file=""):
     if not is_displayed:
         print("Not being displayed")
-    client = AiClientMain(client_id, is_training, is_displayed, is_load_weights, weight_file)
+    client = AiClientMain(client_id, is_training, is_displayed, is_load_weights, weight_file, optimizer_file)
     client.start()

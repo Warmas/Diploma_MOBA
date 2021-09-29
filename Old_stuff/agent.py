@@ -56,7 +56,7 @@ class Agent:
         # If gpu is to be used
         self.device = device
         self.n_outputs = DISC_ACTION_N + CONT_ACTION_N
-        self.brain = AgentNn(SCREEN_HEIGHT, SCREEN_WIDTH, self.n_outputs).to(self.device)
+        self.brain = AgentNn(AGENT_SCR_HEIGHT, AGENT_SCR_WIDTH, self.n_outputs).to(self.device)
         self.EPS_START = 0.9
         self.EPS_END = 0.05
         self.EPS_DECAY = 200
@@ -81,8 +81,8 @@ class Agent:
                 cont_action = torch.clamp(cont_action, 0.0001, 1)  # Can't be 0 as it would divide by 0 later on!
                 mouse_x_prob = cont_action[0][0]
                 mouse_y_prob = cont_action[0][1]
-                mouse_x = mouse_x_prob.item() * SCREEN_WIDTH
-                mouse_y = mouse_y_prob.item() * SCREEN_HEIGHT
+                mouse_x = mouse_x_prob.item() * AGENT_SCR_WIDTH
+                mouse_y = mouse_y_prob.item() * AGENT_SCR_HEIGHT
                 action = Action(disc_action, mouse_x, mouse_y)
                 prob_out = ActionProb(disc_act_prob.item(), mouse_x_prob.item(), mouse_y_prob.item())
                 # prob_out = torch.stack((disc_act_prob, mouse_x_prob, mouse_y_prob), dim=0)
@@ -90,8 +90,8 @@ class Agent:
         # Explore
         else:
             disc_action = random.randint(0, DISC_ACTION_N - 1)
-            mouse_x = random.randint(0, SCREEN_WIDTH)
-            mouse_y = random.randint(0, SCREEN_HEIGHT)
+            mouse_x = random.randint(0, AGENT_SCR_WIDTH)
+            mouse_y = random.randint(0, AGENT_SCR_HEIGHT)
             action = Action(disc_action, mouse_x, mouse_y)
             disc_action = torch.tensor([disc_action], dtype=torch.int64).to(self.device).detach()
             with torch.no_grad():

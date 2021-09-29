@@ -105,8 +105,8 @@ class CriticForActions:  # If we want to calculate Q value of actions not V valu
 
     def get_best_action_value(self, state):
         max_q = (Action(0, 0, 0), 0)
-        for mouse_x in range(0, SCREEN_WIDTH, 1):  # Step can be increased to look at every 5th pixel or so
-            for mouse_y in range(0, SCREEN_HEIGHT, 1):
+        for mouse_x in range(0, AGENT_SCR_WIDTH, 1):  # Step can be increased to look at every 5th pixel or so
+            for mouse_y in range(0, AGENT_SCR_HEIGHT, 1):
                 for disc in range(DISC_ACTION_N):
                     with torch.no_grad():
                         action = Action(disc, mouse_x, mouse_y)
