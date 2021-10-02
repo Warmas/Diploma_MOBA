@@ -21,15 +21,14 @@ class AiClientMain(ClientMain):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.enemy_player = None
 
-        self.MAX_EPISODE_N = 500
+        self.MAX_EPISODE_N = 30
         self.CHECKPOINT_EP_N = 50
-        self.cur_episode_n = 1
 
         self.is_training = is_training
         self.device = None
         self.agent_trainer = None
         self.AGENT_WEIGHT_PATH_ROOT = "AI_Client/neural_nets/weights/ppo/"
-        self.OPTIMIZER_PATH_ROOT = "AI_Client/optimizers/ppo"
+        self.OPTIMIZER_PATH_ROOT = "AI_Client/optimizers/ppo/"
 
         if torch.cuda.is_available():
             print("Using cuda")
@@ -38,22 +37,35 @@ class AiClientMain(ClientMain):
             print("Using cpu")
             self.device = "cpu"
         self.agent = PpoActorCritic(self.device)
+        agent_weight_path = ""
         if not self.is_training:
-            self.agent.load_brain_weights(self.AGENT_WEIGHT_PATH_ROOT + weight_file)
-            print("Loaded weights from path: ", self.AGENT_WEIGHT_PATH_ROOT + weight_file)
+            agent_weight_path = self.AGENT_WEIGHT_PATH_ROOT + weight_file
+            self.agent.load_brain_weights(agent_weight_path)
+            print("Loaded weights from path: ", agent_weight_path)
         else:
-            if is_load_weights:
-                self.agent.load_brain_weights(self.AGENT_WEIGHT_PATH_ROOT + weight_file, is_training=True)
-                print("Loaded weights from path: ", self.AGENT_WEIGHT_PATH_ROOT + weight_file)
             self.agent_trainer = PpoTrainer(self.device, self.agent)
+            optimizer_path = ""
             if is_load_weights:
-                self.agent_trainer.load_optimizer(self.OPTIMIZER_PATH_ROOT + optimizer_file)
-                print("Loaded optimizer from path: ", self.OPTIMIZER_PATH_ROOT + optimizer_file)
+                agent_weight_path = self.AGENT_WEIGHT_PATH_ROOT + weight_file
+                optimizer_path = self.OPTIMIZER_PATH_ROOT + optimizer_file
+            self.agent_trainer.init(is_load_weights, agent_weight_path, optimizer_path)
+            if is_load_weights:
+                print("Loaded agent weights from path: ", agent_weight_path)
+                print("Loaded optimizer from path: ", optimizer_path)
 
         self.steps_done = 0
         self.agent_frame_time = 0
         self.AGENT_FRAME_DELAY = 0.15
         self.cur_reward = 0
+
+        # TESTING
+        self.test_counter = 0
+        self.test_num = 0
+        self.test_display_counter = 0
+
+    def select_trainer(self):
+        if self.is_training:
+            self.agent_trainer.select_as_trainer()
 
     def start_game_callback(self):
         for player in self.player_dict.values():
@@ -101,6 +113,7 @@ class AiClientMain(ClientMain):
 
     def pause_loop(self, game_over=False, loser_id=""):
         self.is_paused = True
+        print("Paused game.")
         self.start_game = False
         self.steps_done = 0
         if game_over:
@@ -202,28 +215,30 @@ class AiClientMain(ClientMain):
         tran = Transition(State(image), disc_act, reward, act_prob)
         # If there were more agents each agent's message would include it's number but we only have one.
         self.agent_trainer.memory_list[1].push(tran)
-        print("Image received: ", tran_n)
+        if tran_n % 20 == 0:
+            print("Image received: ", tran_n)
 
     def transfer_done_callback(self):
         print("Optimization started...")
         actor_loss_list, critic_loss_list, combined_loss_list, \
         disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list = \
             self.agent_trainer.optimize_models()
-        print("Actor loss: ", actor_loss_list,
-              "\n\nCritic loss: ", critic_loss_list,
-              "\n\nCombined loss:", combined_loss_list,
-              "\n\nDiscrete action loss:", disc_act_loss_list,
-              "\n\nContinuous action loss:", cont_act_loss_list,
-              "\n\nDiscrete entropy loss:", disc_entropy_loss_list,
-              "\n\nContinuous entropy loss:", cont_entropy_loss_list)
-        print("Reward sums: ", reward_sum_list)
-        print("Total reward: ", sum(reward_sum_list))
-        print("Finished episode: ", self.cur_episode_n)
-        if self.cur_episode_n <= self.MAX_EPISODE_N:
+        #print("Actor loss: ", actor_loss_list,
+        #      "\n\nCritic loss: ", critic_loss_list,
+        #      "\n\nCombined loss:", combined_loss_list,
+        #      "\n\nDiscrete action loss:", disc_act_loss_list,
+        #      "\n\nContinuous action loss:", cont_act_loss_list,
+        #      "\n\nDiscrete entropy loss:", disc_entropy_loss_list,
+        #      "\n\nContinuous entropy loss:", cont_entropy_loss_list)
+        #print("Reward sums: ", reward_sum_list)
+        #print("Total reward: ", sum(reward_sum_list))
+        finished_episode = self.agent_trainer.cur_episode_n - 1
+        print("Finished episode: ", finished_episode)
+        if finished_episode <= self.MAX_EPISODE_N:
             print("Saving models...")
             # We don't really need checkpoints as we have to save each episode anyway
             self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
-            if (self.cur_episode_n % self.CHECKPOINT_EP_N) == 0:
+            if (finished_episode % self.CHECKPOINT_EP_N) == 0:
                 self.agent.save_brain_weights(
                     "checkpoint_agent_" + str(self.CHECKPOINT_EP_N), self.AGENT_WEIGHT_PATH_ROOT)
                 self.agent_trainer.save_optimizer(
@@ -234,10 +249,9 @@ class AiClientMain(ClientMain):
             self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
         else:
             print("Saving final agent...")
-            self.agent.save_brain_weights("final_agent", self.AGENT_WEIGHT_PATH_ROOT)
+            self.agent_trainer.shutdown(self.AGENT_WEIGHT_PATH_ROOT + "final_agent")
             print("Saved final agent!")
             self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
-        self.cur_episode_n += 1
 
     def optimize_done_callback(self):
         print("Loading new models...")
@@ -253,8 +267,23 @@ class AiClientMain(ClientMain):
             self.counter_for_fps += delta_t
             if self.counter_for_fps > 2:
                 self.counter_for_fps = 0
-                print("FPS: ", 1 / delta_t)
-                print("Steps done: ", self.steps_done)
+                #print("FPS: ", 1 / delta_t)
+                #print("Steps done: ", self.steps_done)
+
+        # TESTING
+        self.test_counter += delta_t
+        if self.test_counter > 5:
+            self.test_counter = 0
+            self.test_num += 1
+            if self.test_num > 2:
+                self.test_num = 0
+            if self.test_num == 0:
+                print("+++Current shape: TRIANGLE")
+            elif self.test_num == 1:
+                print("+++Current shape: RECTANGLE")
+            elif self.test_num == 2:
+                print("+++Current shape: CIRCLE")
+            self.renderer.test_num = self.test_num
 
         self.process_incoming_messages()
 
@@ -284,24 +313,60 @@ class AiClientMain(ClientMain):
 
             mouse_x = action.mouse_x
             mouse_y = action.mouse_y
+            is_show_choice = False
+            if cur_frame - self.test_display_counter > 0.5:
+                self.test_display_counter = cur_frame
+                is_show_choice = True
             if action.disc_action == 0:
+                # TESTING
+                if is_show_choice:
+                    print("---Choosing TRIANGLE---")
+                if self.test_num == 0:
+                    self.cur_reward += TEST_REWARD
+                else:
+                    self.cur_reward -= TEST_REWARD
                 # print("---Choosing 0---")
                 pass
             elif action.disc_action == 1:
                 self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
+                # TESTING
+                if is_show_choice:
+                    print("---Choosing RECTANGLE---")
+                if self.test_num == 1:
+                    self.cur_reward += TEST_REWARD
+                else:
+                    self.cur_reward -= TEST_REWARD
                 # print("---Choosing 1---")
             elif action.disc_action == 2:
                 self.cast_1(mouse_x, mouse_y)
-                self.cur_reward += TEST_REWARD
+                # TESTING
+                if is_show_choice:
+                    print("---Choosing CIRCLE---")
+                if self.test_num == 2:
+                    self.cur_reward += TEST_REWARD
+                else:
+                    self.cur_reward -= TEST_REWARD
                 # print("---Choosing 2---")
             elif action.disc_action == 3:
                 self.cast_2(mouse_x, mouse_y)
+                # TESTING
+                if is_show_choice:
+                    print("---Choosing NONE1---")
+                self.cur_reward -= (TEST_REWARD * 4)
                 # print("---Choosing 3---")
             elif action.disc_action == 4:
                 self.cast_3(mouse_x, mouse_y)
+                # TESTING
+                if is_show_choice:
+                    print("---Choosing NONE2---")
+                self.cur_reward -= (TEST_REWARD * 4)
                 # print("---Choosing 4---")
             elif action.disc_action == 5:
                 self.cast_4(mouse_x, mouse_y)
+                # TESTING
+                if is_show_choice:
+                    print("---Choosing NONE3---")
+                self.cur_reward -= (TEST_REWARD * 4)
                 # print("---Choosing 5---")
 
             if self.is_training:

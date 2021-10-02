@@ -64,6 +64,28 @@ class PpoAgentCriticNn(nn.Module):
             nn.Linear(self.hidden_out_size, 1)
         )
 
+        nn.init.kaiming_uniform(self.conv_block[0].weight, nonlinearity="relu")
+        nn.init.constant(self.conv_block[0].bias, 0.0)
+        nn.init.kaiming_uniform(self.conv_block[2].weight, nonlinearity="relu")
+        nn.init.constant(self.conv_block[2].bias, 0.0)
+        nn.init.kaiming_uniform(self.conv_block[4].weight, nonlinearity="relu")
+        nn.init.constant(self.conv_block[4].bias, 0.0)
+
+        nn.init.kaiming_uniform(self.hidden_block[0].weight, nonlinearity="relu")
+        nn.init.constant(self.hidden_block[0].bias, 0.0)
+
+        nn.init.xavier_uniform(self.disc_act_block[0].weight)
+        nn.init.constant(self.disc_act_block[0].bias, 0.0)
+
+        nn.init.xavier_uniform(self.cont_means_block[0].weight)
+        nn.init.constant(self.cont_means_block[0].bias, 0.0)
+
+        nn.init.xavier_uniform(self.cont_vars_block[0].weight)
+        nn.init.constant(self.cont_vars_block[0].bias, 0.0)
+
+        nn.init.xavier_uniform(self.critic_block[0].weight)
+        nn.init.constant(self.critic_block[0].bias, 0.0)
+
     def forward(self, image_t):
         """Requires image as a flattened image tensor."""
         batch_size = image_t.shape[0]

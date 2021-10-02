@@ -6,13 +6,14 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as nn_func
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+from torch.utils.tensorboard import SummaryWriter
 
 from AI_Client.src.agent.training_memory import *
 
 
 class PpoTrainer:
     def __init__(self, device, actor_critic):
-        self.GAMMA = 0.99  # If we can increase it to 0.999, but this is good enough
+        self.GAMMA = 0.0  # If we can increase it to 0.999, but this is good enough
         self.TARGET_UPDATE = 10
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
@@ -36,12 +37,38 @@ class PpoTrainer:
         for num in range(self.AGENT_N - 1):
             self.memory_list.append(TrainingMemory(self.MEMORY_CAPACITY))
 
+        self.cur_episode_n = 1
+        self.is_logging = False
+        self.writer = None
+        if self.is_logging:
+            self.writer = SummaryWriter()
+
+    def select_as_trainer(self):
+        self.is_logging = True
+        self.writer = SummaryWriter()
+
+    def init(self, is_continue_training=False, agent_weight_path="", optimizer_path=""):
+        if is_continue_training:
+            self.actor_critic.load_brain_weights(agent_weight_path, is_training=True)
+            self.load_optimizer(optimizer_path)
+
+    def shutdown(self, agent_path, optimizer_path=""):
+        self.actor_critic.save_brain_weights(agent_path)
+        if len(optimizer_path):
+            self.save_optimizer(optimizer_path)
+        if self.is_logging:
+            self.writer.close()
+
     def optimize_models(self):
         reward_sum_list = []
+        total_reward_sum = 0  # For all agents
+        reward_mean = 0
         for memory in self.memory_list:
-            reward_sum = 0
+            reward_sum = 0  # For one agent
             for reward in memory.reward_list:
                 reward_sum += reward
+            total_reward_sum += reward_sum
+            reward_mean = total_reward_sum / self.AGENT_N
             reward_sum_list.append(reward_sum)
 
         for mem_n in range(len(self.memory_list)):
@@ -93,12 +120,49 @@ class PpoTrainer:
             cont_act_loss_list.append(cont_act_loss)
             disc_entropy_loss_list.append(disc_entropy_loss)
             cont_entropy_loss_list.append(cont_entropy_loss)
-            # Clean up batch data
-            batch_image_list.clear()
-            batch_disc_act_list.clear()
-            batch_reward_list.clear()
-            batch_act_prob_list.clear()
-            del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
+
+            if self.is_logging:
+                self.writer.add_scalar("Total loss", loss, self.cur_episode_n)
+                self.writer.add_scalar("Actor loss", actor_loss, self.cur_episode_n)
+                self.writer.add_scalar("Critic loss", critic_loss, self.cur_episode_n)
+                self.writer.add_scalar("Discrete action loss", disc_act_loss, self.cur_episode_n)
+                self.writer.add_scalar("Continuous action loss", cont_act_loss, self.cur_episode_n)
+                self.writer.add_scalar("Discrete entropy", disc_entropy_loss, self.cur_episode_n)
+                self.writer.add_scalar("Continuous entopy", cont_entropy_loss, self.cur_episode_n)
+                self.writer.add_scalar("Total reward", total_reward_sum, self.cur_episode_n)
+                self.writer.add_scalar("Reward mean", reward_mean, self.cur_episode_n)
+
+                self.writer.add_histogram("Conv1 weights", self.actor_critic.brain.conv_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram("Conv1 bias", self.actor_critic.brain.conv_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram("Conv2 weights", self.actor_critic.brain.conv_block[2].weight, self.cur_episode_n)
+                self.writer.add_histogram("Conv2 bias", self.actor_critic.brain.conv_block[2].bias, self.cur_episode_n)
+                self.writer.add_histogram("Conv3 weights", self.actor_critic.brain.conv_block[4].weight, self.cur_episode_n)
+                self.writer.add_histogram("Conv3 bias", self.actor_critic.brain.conv_block[4].bias, self.cur_episode_n)
+
+                self.writer.add_histogram("Hidden weights", self.actor_critic.brain.hidden_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram("Hidden bias", self.actor_critic.brain.hidden_block[0].bias, self.cur_episode_n)
+
+                self.writer.add_histogram("Disc action weights", self.actor_critic.brain.disc_act_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram("Disc action bias", self.actor_critic.brain.disc_act_block[0].bias, self.cur_episode_n)
+
+                self.writer.add_histogram("Cont mean weights", self.actor_critic.brain.cont_means_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram("Cont mean bias", self.actor_critic.brain.cont_means_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram("Cont var weights", self.actor_critic.brain.cont_vars_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram("Cont var bias", self.actor_critic.brain.cont_vars_block[0].bias, self.cur_episode_n)
+
+                self.writer.add_histogram("Critic weights", self.actor_critic.brain.critic_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram("Critic bias", self.actor_critic.brain.critic_block[0].bias, self.cur_episode_n)
+
+                self.writer.flush()
+
+                # Clean up batch data
+                batch_image_list.clear()
+                batch_disc_act_list.clear()
+                batch_reward_list.clear()
+                batch_act_prob_list.clear()
+                del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
+
+        self.cur_episode_n += 1
         return actor_loss_list, critic_loss_list, combined_loss_list, \
             disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list
 
@@ -141,6 +205,7 @@ class PpoTrainer:
         cont_act_loss_to_disp = cont_act_loss.view(-1, 1).item()
         disc_entropy_loss_to_disp = disc_entropy_loss.view(-1, 1).item()
         cont_entropy_loss_to_disp = cont_entropy_loss.view(-1, 1).item()
+
         return actor_loss_to_disp, critic_loss_to_disp, loss_to_disp, \
             disc_act_loss_to_disp, cont_act_loss_to_disp, disc_entropy_loss_to_disp, cont_entropy_loss_to_disp
 
@@ -176,7 +241,6 @@ class PpoTrainer:
         act_entropy = torch.cat((disc_entropy_loss, cont_entropy_loss), dim=1)
         # Weird entropy approach idea, punishes low entropy should be avoided
         # actor_loss = action_loss + (1 / act_entropy)
-        # Usual entropy approach
         actor_loss = action_loss - act_entropy
 
         # Take the mean of all samples in the batch to get the actor loss. Other losses for feedback.

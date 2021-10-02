@@ -143,6 +143,7 @@ class ClientMain:
                 self.heal_place_list.append(h_p)
             if msg_data[5] == "1":
                 self.is_first_player = True
+                self.select_trainer()
             self.is_auth_comp = True
 
         elif msg_id == MessageTypes.NewPlayer.value:
@@ -164,11 +165,11 @@ class ClientMain:
             player = self.player_dict[player_id]
             new_pos = np.array([x_p, y_p])
             # should_post = False
-            if g.distance(player.position, new_pos) > 50:
-                # should_post = True
-                print("Large position jump: ")
-                print("\tPast pos: ", player.position)
-                print("\tNew pos: ", new_pos)
+            #if g.distance(player.position, new_pos) > 50:
+            #    # should_post = True
+            #    print("Large position jump: ")
+            #    print("\tPast pos: ", player.position)
+            #    print("\tNew pos: ", new_pos)
             player.position = new_pos  # This causes "jumps" but corrects any error
             player.set_move_to(np.array([x_mt, y_mt]))
             player.new_front(player.move_to)
@@ -316,6 +317,9 @@ class ClientMain:
 
         # AI client messages
         self.process_agent_message(msg_id, msg)
+
+    def select_trainer(self):
+        pass
 
     def start_game_callback(self):
         pass
