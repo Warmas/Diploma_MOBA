@@ -58,25 +58,25 @@ class Client:
         else:
             self.exc_mutex.release()
 
+    def get_connection_state(self):
+        return self.connection_object.is_connected
+
     def process_all_messages(self):
         while not self.messages_in.empty():
             msg = self.messages_in.front()
             self.messages_in.pop_left()
             self.process_message_callback(msg)
 
-    def send_message(self, msg_id, msg_body, is_body_string=False):
+    def send_message(self, msg):
+        if self.connection_object.is_connected:
+            self.connection_object.send_message(self.sock, msg)
+        else:
+            print("Connection is closed, message send failed!")
+
+    def create_and_send_message(self, msg_id, msg_body, is_body_string=False):
         if self.connection_object.is_connected:
             msg = Message()
             msg.set_message(msg_id, msg_body, is_body_string)
             self.connection_object.send_message(self.sock, msg)
         else:
             print("Connection is closed, message send failed!")
-
-    def send_complete_message(self, msg):
-        if self.connection_object.is_connected:
-            self.connection_object.send_message(self.sock, msg)
-        else:
-            print("Connection is closed, message send failed!")
-
-    def get_connection_state(self):
-        return self.connection_object.is_connected

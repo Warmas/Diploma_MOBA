@@ -9,16 +9,21 @@ class Entity:
         self.health = self.max_health
         self.position = np.array([0.0, 0.0])
         self.move_to = np.array([0.0, 0.1])
-        self.front = g.vec_normalize(np.array([1, 1]))
+        self.front = g.vec_normalize(np.array([1.0, 1.0]))
         self.speed = speed
         self.is_colliding = False
         self.is_standing = True
         self.col_speed_mod = 1
 
-    def change_position(self, pos):
+    def change_position(self, pos, new_front=np.array([0.0, 1.0])):
         """Changes the position and sets "move_to" to the position so any previous movement command gets discarded."""
         self.position = pos
-        self.move_to = pos
+        self.stop()
+        self.front = new_front
+
+    def stop(self):
+        self.is_standing = True
+        self.move_to = self.position
 
     def turn(self, new_front):
         self.front = new_front
@@ -31,10 +36,14 @@ class Entity:
     def move(self, delta_t):
         # if np.allclose(self.position, self.move_to):
         if g.distance(self.position, self.move_to) > 1:
+            original_pos = self.position
             if not self.is_colliding:
                 self.position = self.front * float(self.speed) * delta_t + self.position
             else:
                 self.position = self.front * float(self.speed) * self.col_speed_mod * delta_t + self.position
+            if np.linalg.norm(self.position - original_pos) > np.linalg.norm(self.move_to - original_pos):
+                self.position = self.move_to
+                self.stop()
         else:
             self.is_standing = True
         self.is_colliding = False
@@ -66,7 +75,8 @@ class Entity:
 
     def new_front(self, new_point):
         vec = np.subtract(new_point, self.position)
-        self.front = vec / np.linalg.norm(vec)
+        if vec[0]**2 + vec[1]**2 > 0.01:
+            self.front = vec / np.linalg.norm(vec)
 
     def update_front(self):
         self.new_front(self.move_to)
@@ -74,3 +84,4 @@ class Entity:
     def set_move_to(self, move_to):
         self.is_standing = False
         self.move_to = move_to
+        self.update_front()

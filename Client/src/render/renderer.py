@@ -3,9 +3,9 @@ from enum import Enum
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLUT import *
+from Client.src.render.render_constants import *
 import OpenGL.GL.shaders
 import glm
-from Client.src.render.render_constants import *
 
 from Client.src.render.shader import Shader
 
@@ -59,8 +59,8 @@ class Renderer:
         self.projectile_list = projectile_list
         self.aoe_list = aoe_list
 
-        # TESTING
-        self.test_num = 0
+        # FOR TESTING
+        # self.test_num = 0
 
         # Shader setup for player
         # vs_path = "Client/src/render/shaders/vertex_shader.vs"
@@ -177,35 +177,34 @@ class Renderer:
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         glOrtho(0.0, SCR_WIDTH, 0.0, SCR_HEIGHT, 0.0, 1.0)
-        # glMatrixMode(GL_MODELVIEW)
-        # glLoadIdentity()
-        #for aoe in self.aoe_list.values():
-        #    self.draw_aoe(aoe)
-        #for obs in self.obstacle_list:
-        #    self.draw_obstacle(obs)
-        #for h_p in self.heal_place_list:
-        #    self.draw_healplace(h_p)
-        #for mob in self.mob_dict.values():
-        #    self.draw_mob(mob)
-        ## self.draw_mobs()
-        #self.draw_user_player()
-        #for enemy in self.player_dict.values():
-        #    if not enemy.player_id == self.user_player.player_id:
-        #        self.draw_enemy_player(enemy)
-        #for projectile in self.projectile_list.values():
-        #    self.draw_fireball(projectile)
 
-        # TESTING
-        # Testing code
-        if self.test_num == 0:
-            glColor3f(0.0, 1.0, 0.0)
-            self.draw_basic_triangle(np.array((500, 400)), 300)
-        elif self.test_num == 1:
-            glColor3f(1.0, 0.0, 0.0)
-            self.draw_rectangle(np.array((500, 400)), 200, 250)
-        elif self.test_num == 2:
-            glColor3f(0.0, 0.0, 1.0)
-            self.draw_circle(np.array((500, 400)), 300, 10)
+        for aoe in self.aoe_list.values():
+            self.draw_aoe(aoe)
+        for obs in self.obstacle_list:
+            self.draw_obstacle(obs)
+        for h_p in self.heal_place_list:
+            self.draw_healplace(h_p)
+        for mob in self.mob_dict.values():
+            self.draw_mob(mob)
+        # self.draw_mobs()
+        self.draw_user_player()
+        for enemy in self.player_dict.values():
+            if not enemy.player_id == self.user_player.player_id:
+                self.draw_enemy_player(enemy)
+        for projectile in self.projectile_list.values():
+            self.draw_fireball(projectile)
+
+        # # FOR TESTING SHAPES
+        # if self.test_num == 0:
+        #     glColor3f(0.0, 1.0, 0.0)
+        #     self.draw_basic_triangle(np.array((500, 400)), 300)
+        # elif self.test_num == 1:
+        #     glColor3f(0.0, 1.0, 0.0)
+        #     self.draw_rectangle(np.array((500, 400)), 200, 250)
+        # elif self.test_num == 2:
+        #     glColor3f(0.0, 1.0, 0.0)
+        #     self.draw_circle(np.array((500, 400)), 300, 10)
+
         if self.is_displayed:
             glutSwapBuffers()
 

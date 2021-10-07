@@ -1,6 +1,7 @@
 import math
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,7 +14,7 @@ from AI_Client.src.agent.training_memory import *
 
 class PpoTrainer:
     def __init__(self, device, actor_critic):
-        self.GAMMA = 0.0  # If we can increase it to 0.999, but this is good enough
+        self.GAMMA = 0.99  # If we can increase it to 0.999, but this is good enough
         self.TARGET_UPDATE = 10
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
@@ -23,7 +24,7 @@ class PpoTrainer:
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2
-        self.MEMORY_CAPACITY = 1024  # May be changed depending on RAM.
+        self.MEMORY_CAPACITY = 256  # May be changed depending on RAM.
         self.BATCH_SIZE = 32  # This increases GPU memory usage, hard to pinpoint good value.
 
         self.device = device
@@ -79,6 +80,16 @@ class PpoTrainer:
                 memory.reward_list[trans_n] += memory.reward_list[trans_n + 1] * self.GAMMA
             memory.is_r_disc = True
 
+            # Normalizing rewards
+            reward_np_list = np.array(memory.reward_list)
+            is_all_zero = np.all((reward_np_list == 0))
+            if not is_all_zero:
+                rewards_mean = reward_np_list.mean(axis=0)
+                rewards_var = reward_np_list.std(axis=0)
+                for i in range(len(memory.reward_list)):
+                    memory.reward_list[i] = \
+                        float((memory.reward_list[i] - rewards_mean) / (rewards_var + 1e-10))
+
         all_memory = TrainingMemory(0)
         all_memory.is_r_disc = True
         for memory in self.memory_list:
@@ -132,26 +143,42 @@ class PpoTrainer:
                 self.writer.add_scalar("Total reward", total_reward_sum, self.cur_episode_n)
                 self.writer.add_scalar("Reward mean", reward_mean, self.cur_episode_n)
 
-                self.writer.add_histogram("Conv1 weights", self.actor_critic.brain.conv_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram("Conv1 bias", self.actor_critic.brain.conv_block[0].bias, self.cur_episode_n)
-                self.writer.add_histogram("Conv2 weights", self.actor_critic.brain.conv_block[2].weight, self.cur_episode_n)
-                self.writer.add_histogram("Conv2 bias", self.actor_critic.brain.conv_block[2].bias, self.cur_episode_n)
-                self.writer.add_histogram("Conv3 weights", self.actor_critic.brain.conv_block[4].weight, self.cur_episode_n)
-                self.writer.add_histogram("Conv3 bias", self.actor_critic.brain.conv_block[4].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv1 weights", self.actor_critic.brain.conv_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv1 bias", self.actor_critic.brain.conv_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv2 weights", self.actor_critic.brain.conv_block[2].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv2 bias", self.actor_critic.brain.conv_block[2].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv3 weights", self.actor_critic.brain.conv_block[4].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv3 bias", self.actor_critic.brain.conv_block[4].bias, self.cur_episode_n)
 
-                self.writer.add_histogram("Hidden weights", self.actor_critic.brain.hidden_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram("Hidden bias", self.actor_critic.brain.hidden_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Hidden weights", self.actor_critic.brain.hidden_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Hidden bias", self.actor_critic.brain.hidden_block[0].bias, self.cur_episode_n)
 
-                self.writer.add_histogram("Disc action weights", self.actor_critic.brain.disc_act_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram("Disc action bias", self.actor_critic.brain.disc_act_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Disc action weights", self.actor_critic.brain.disc_act_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Disc action bias", self.actor_critic.brain.disc_act_block[0].bias, self.cur_episode_n)
 
-                self.writer.add_histogram("Cont mean weights", self.actor_critic.brain.cont_means_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram("Cont mean bias", self.actor_critic.brain.cont_means_block[0].bias, self.cur_episode_n)
-                self.writer.add_histogram("Cont var weights", self.actor_critic.brain.cont_vars_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram("Cont var bias", self.actor_critic.brain.cont_vars_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont mean weights", self.actor_critic.brain.cont_means_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont mean bias", self.actor_critic.brain.cont_means_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont var weights", self.actor_critic.brain.cont_vars_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont var bias", self.actor_critic.brain.cont_vars_block[0].bias, self.cur_episode_n)
 
-                self.writer.add_histogram("Critic weights", self.actor_critic.brain.critic_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram("Critic bias", self.actor_critic.brain.critic_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Critic weights", self.actor_critic.brain.critic_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Critic bias", self.actor_critic.brain.critic_block[0].bias, self.cur_episode_n)
 
                 self.writer.flush()
 
@@ -188,7 +215,7 @@ class PpoTrainer:
 
         self.optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm(self.actor_critic.brain.parameters(), self.GRAD_NORM)
+        nn.utils.clip_grad_norm_(self.actor_critic.brain.parameters(), self.GRAD_NORM)
         # print("Printing gradients before step...")
         # print("Printing conv1 grad before step: ", self.actor_critic.brain.conv_block[0].weight.grad)
         # print("Printing hidden_block grad before step: ", self.actor_critic.brain.hidden_block[0].weight.grad)
@@ -268,4 +295,3 @@ class PpoTrainer:
     def load_optimizer(self, name, root_path=""):
         path = root_path + name
         self.optimizer.load_state_dict(torch.load(path))
-

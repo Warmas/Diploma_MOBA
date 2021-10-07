@@ -6,7 +6,24 @@ class Mob(entity.Entity):
         self.mob_id = mob_id
         super(Mob, self).__init__(radius=10, speed=60, max_health=30)
         self.attack_damage = 5
-        self.attack_range = 12
+        self.attack_range = 30
         self.detect_range = 100
         self.attack_cooldown = 1
         self.attack_cd_start = 0
+        self.attack_cd_left = 0
+
+    def on_update(self, delta_t):
+        self.move(delta_t)
+        # Necessary because of collision effect with obstacles, also makes it less error-prone
+        self.update_front()
+
+        if self.attack_cd_left > 0:
+            self.attack_cd_left -= delta_t
+
+    def attack(self):
+        self.attack_cd_left = self.attack_cooldown
+
+    def is_attack_ready(self):
+        if self.attack_cd_left > 0:
+            return False
+        return True

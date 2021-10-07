@@ -38,28 +38,43 @@ class Fireball(Projectile):
 
 
 class Aoe:
-    def __init__(self, owner, position, cast_time, radius, duration, health_modifier):
+    def __init__(self, owner, position, cast_time, radius, max_duration, health_modifier):
         self.owner = owner
         self.position = position
         self.cast_time = cast_time
         self.radius = radius
-        self.duration = duration
+        self.max_duration = max_duration
+        self.time_on = 0
+        self.is_over = False
         self.counter = 0
+        self.counter_tick = 1
         self.health_modifier = health_modifier
         if health_modifier > 0:
             self.beneficial = True
         else:
             self.beneficial = False
 
+    def on_update(self, delta_t):
+        self.time_on += delta_t
+        should_tick = False
+        if self.time_on > self.max_duration:
+            self.is_over = True
+            return self.is_over, should_tick
+        else:
+            if self.counter < self.time_on:
+                self.counter += self.counter_tick
+                should_tick = True
+            return self.is_over, should_tick
+
 
 class HolyGround(Aoe):
     def __init__(self, owner, position, cast_time):
-        super(HolyGround, self).__init__(owner, position, cast_time, radius=30, duration=5, health_modifier=5)
+        super(HolyGround, self).__init__(owner, position, cast_time, radius=30, max_duration=5, health_modifier=5)
 
 
 class BurnGround(Aoe):
     def __init__(self, owner, position, cast_time):
-        super(BurnGround, self).__init__(owner, position, cast_time, radius=40, duration=7, health_modifier=-7)
+        super(BurnGround, self).__init__(owner, position, cast_time, radius=40, max_duration=7, health_modifier=-7)
 
 
 class AoeData:

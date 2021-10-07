@@ -47,7 +47,7 @@ class PpoAgentCriticNn(nn.Module):
         # Additional layers may be recommended to assure discrete-continuous action synchronization.
         self.disc_act_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, disc_act_n),
-            nn.Softmax()
+            nn.Softmax(dim=1)
         )
 
         self.cont_means_block = nn.Sequential(
@@ -64,27 +64,27 @@ class PpoAgentCriticNn(nn.Module):
             nn.Linear(self.hidden_out_size, 1)
         )
 
-        nn.init.kaiming_uniform(self.conv_block[0].weight, nonlinearity="relu")
-        nn.init.constant(self.conv_block[0].bias, 0.0)
-        nn.init.kaiming_uniform(self.conv_block[2].weight, nonlinearity="relu")
-        nn.init.constant(self.conv_block[2].bias, 0.0)
-        nn.init.kaiming_uniform(self.conv_block[4].weight, nonlinearity="relu")
-        nn.init.constant(self.conv_block[4].bias, 0.0)
+        nn.init.kaiming_uniform_(self.conv_block[0].weight, nonlinearity="relu")
+        nn.init.constant_(self.conv_block[0].bias, 0.0)
+        nn.init.kaiming_uniform_(self.conv_block[2].weight, nonlinearity="relu")
+        nn.init.constant_(self.conv_block[2].bias, 0.0)
+        nn.init.kaiming_uniform_(self.conv_block[4].weight, nonlinearity="relu")
+        nn.init.constant_(self.conv_block[4].bias, 0.0)
 
-        nn.init.kaiming_uniform(self.hidden_block[0].weight, nonlinearity="relu")
-        nn.init.constant(self.hidden_block[0].bias, 0.0)
+        nn.init.kaiming_uniform_(self.hidden_block[0].weight, nonlinearity="relu")
+        nn.init.constant_(self.hidden_block[0].bias, 0.0)
 
-        nn.init.xavier_uniform(self.disc_act_block[0].weight)
-        nn.init.constant(self.disc_act_block[0].bias, 0.0)
+        nn.init.xavier_uniform_(self.disc_act_block[0].weight)
+        nn.init.constant_(self.disc_act_block[0].bias, 0.0)
 
-        nn.init.xavier_uniform(self.cont_means_block[0].weight)
-        nn.init.constant(self.cont_means_block[0].bias, 0.0)
+        nn.init.xavier_uniform_(self.cont_means_block[0].weight)
+        nn.init.constant_(self.cont_means_block[0].bias, 0.0)
 
-        nn.init.xavier_uniform(self.cont_vars_block[0].weight)
-        nn.init.constant(self.cont_vars_block[0].bias, 0.0)
+        nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
+        nn.init.constant_(self.cont_vars_block[0].bias, 0.0)
 
-        nn.init.xavier_uniform(self.critic_block[0].weight)
-        nn.init.constant(self.critic_block[0].bias, 0.0)
+        nn.init.xavier_uniform_(self.critic_block[0].weight)
+        nn.init.constant_(self.critic_block[0].bias, 0.0)
 
     def forward(self, image_t):
         """Requires image as a flattened image tensor."""
@@ -165,8 +165,8 @@ class PpoActorCritic:
             # Transform continuous values to pixel values
             mouse_x_prob = cont_action[0][0].item()
             mouse_y_prob = cont_action[0][1].item()
-            mouse_x = mouse_x_prob * AGENT_SCR_WIDTH
-            mouse_y = mouse_y_prob * AGENT_SCR_HEIGHT
+            mouse_x = mouse_x_prob * SCR_WIDTH
+            mouse_y = mouse_y_prob * SCR_HEIGHT
 
             action = Action(disc_action, mouse_x, mouse_y)
             prob_out = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)

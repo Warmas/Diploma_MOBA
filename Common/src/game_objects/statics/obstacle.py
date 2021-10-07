@@ -14,8 +14,8 @@ class HealPlace:
         self.ver_len = ver_len
         self.hor_len = hor_len
         self.available = True
-        self.cd_duration = 10
-        self.cd_left = 0
+        self.cd_duration = 10.0
+        self.cd_left = 0.0
         self.cd_start = 0
 
     def use(self):

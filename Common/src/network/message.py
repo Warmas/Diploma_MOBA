@@ -3,26 +3,36 @@ import struct
 
 
 class MessageTypes(Enum):
+    # General
     PingServer = 1
     MessagePrint = 2
+
+    # Connection
     Authentication = 3
     NewPlayer = 4
+
+    # World updates
     CastSpell = 5
     PlayerMoveTo = 6
     RemoveGameObject = 7
     UpdateHealth = 8
     MobsMoveTo = 9
     MobsKilled = 10
-    PauseGame = 11
+
+    # Other
+    StartGame = 11
     ClientReady = 12
-    StartGame = 13
+    GameOver = 13
     ResetMap = 14
-    ContinueGame = 15
-    TransitionData = 16
-    TransferDone = 17
-    OptimizeDone = 18
-    CloseGame = 19
-    DetailedHpChange = 20
+    CloseGame = 15
+    PauseGame = 16
+    UnpauseGame = 17
+
+    # AI
+    TransitionData = 18
+    TransferDone = 19
+    OptimizeDone = 20
+    DetailedHpChange = 21
 
 
 class Message:

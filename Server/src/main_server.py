@@ -19,8 +19,9 @@ from Common.src.game_constants import *
 
 class ServerMain:
     def __init__(self):
-        self.MOB_COUNT = 12
-        self.OBSTACLE_COUNT = 4
+        self.PLAYER_COUNT = 1    # TESTING
+        self.MOB_COUNT = 0       # TESTING
+        self.OBSTACLE_COUNT = 0  # TESTING
 
         self.net_server = net.Server(self.process_message, self.connection_lost)
         self.player_dict = {}
@@ -29,42 +30,47 @@ class ServerMain:
         self.heal_place_list = []
         self.projectile_list = []
         self.aoe_list = []
+
         self.last_frame = 0.0
-        self.delta_t = 0.01
         self.mob_aggro_timer = 0
         self.counter_for_fps = 0
         self.is_fps_on = True
-        self.client_ready_counter = 0
-        self.is_paused = False
-        self.is_shutdown = False
+        self.is_stop = False
 
-        # For machine learning
+        self.is_game_over = False
+        self.client_ready_counter = 0
+
+        self.is_paused = False
+        self.unpause_ready_counter = 0
+        self.connection_num_at_pause = 0
+
+        # For agent training
         self.optimizer_socket = None
 
     def start(self):
         self.net_server.start()
         self.map_reset()
-        while self.client_ready_counter < 2:
+        while self.client_ready_counter < self.PLAYER_COUNT:
             self.net_server.process_all_messages()
-        self.net_server.message_all(MessageTypes.StartGame.value, b'1')
-        while not self.is_shutdown:
-            self.server_loop()
+        print("Starting game!")
+        self.net_server.create_and_message_all(MessageTypes.StartGame.value, b'1')
+        self.run()
 
     def stop(self):
         print("Shutting down!")
         self.net_server.stop()
-        self.is_shutdown = True
+        self.is_stop = True
 
     def process_message(self, msg):
         msg_id = msg.get_msg_id()
         if msg_id == MessageTypes.PingServer.value:
             # send_time = struct.unpack("!f", msg.body)[0]
             # print(time.time() - send_time)
-            self.net_server.send_message(msg.socket, MessageTypes.PingServer.value, msg.body)
+            self.net_server.create_and_send_message(msg.socket, MessageTypes.PingServer.value, msg.body)
 
         elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from client: ", msg.socket.getpeername(), msg.body)
-            self.net_server.send_message(msg.socket, MessageTypes.MessagePrint.value, str(msg.get_body_as_string()), True)
+            self.net_server.create_and_send_message(msg.socket, MessageTypes.MessagePrint.value, str(msg.get_body_as_string()), True)
 
         elif msg_id == MessageTypes.Authentication.value:
             print("Client authenticated: ", msg.socket.getpeername(), " as: ", msg.get_body_as_string())
@@ -85,7 +91,7 @@ class ServerMain:
             new_msg.push_float(player.position[0])
             new_msg.push_float(player.position[1])
             new_msg.push_double(send_time)
-            self.net_server.complete_message_all(new_msg)
+            self.net_server.message_all(new_msg)
 
         elif msg_id == MessageTypes.CastSpell.value:
             self.cast_spell(msg.socket, msg)
@@ -96,26 +102,32 @@ class ServerMain:
         elif msg_id == MessageTypes.CloseGame.value:
             self.stop()
 
-        # AI training stuff
         elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
-                self.is_paused = True
-                self.client_ready_counter = 0
-                self.pause_loop()
+                self.pause_game()
 
+        elif msg_id == MessageTypes.UnpauseGame.value:
+            self.unpause_ready_counter += 1
+
+        # AI training stuff
         elif msg_id == MessageTypes.TransitionData.value:
-            self.net_server.send_complete_message(self.optimizer_socket, msg)
+            self.net_server.send_message(self.optimizer_socket, msg)
 
         elif msg_id == MessageTypes.TransferDone.value:
-            self.net_server.send_message(self.optimizer_socket, MessageTypes.TransferDone.value, msg.body)
+            self.net_server.create_and_send_message(self.optimizer_socket, MessageTypes.TransferDone.value, msg.body)
 
         elif msg_id == MessageTypes.OptimizeDone.value:
-            self.net_server.message_all_but_one(self.optimizer_socket, MessageTypes.OptimizeDone.value, msg.body)
+            self.net_server.message_all(msg)
+
+        elif msg_id == MessageTypes.GameOver.value:
+            self.end_game("noone")
 
     def connection_lost(self, sock):
         player = self.get_player_for_socket(sock)
         if player in self.player_dict.values():
             self.player_dict.pop(player.player_id)
+        if self.is_paused:
+            self.stop()
 
     def map_reset(self):
         self.projectile_list.clear()
@@ -125,24 +137,42 @@ class ServerMain:
         self.mob_dict.clear()
         self.obstacle_list.clear()
         self.heal_place_list.clear()
+
         i = 0
         for player in self.player_dict.values():
             pos_x = 50.0 + 900 * (i % 2)
             pos_y = 400.0
             i += 1
             player.change_position(np.array([pos_x, pos_y]))
+
         for i in range(self.MOB_COUNT):
             mob = Mob(i)
             x = random.randint(MOB_SPAWN_X_MIN, MOB_SPAWN_X_MAX)
             y = random.randint(MOB_SPAWN_Y_MIN, MOB_SPAWN_Y_MAX)
             mob.change_position(np.array([float(x), float(y)]))
             self.mob_dict[i] = mob
+
+        # FOR TESTING MOBS
+        self.mob_dict[0] = Mob(0)
+        self.mob_dict[0].change_position(np.array([500.0, 400.0]))
+        self.mob_dict[1] = Mob(1)
+        self.mob_dict[1].change_position(np.array([500.0, 500.0]))
+        self.mob_dict[2] = Mob(2)
+        self.mob_dict[2].change_position(np.array([500.0, 300.0]))
+        self.mob_dict[3] = Mob(3)
+        self.mob_dict[3].change_position(np.array([400.0, 600.0]))
+        self.mob_dict[4] = Mob(4)
+        self.mob_dict[4].change_position(np.array([400.0, 200.0]))
+        for player in self.player_dict.values():
+            player.change_position(np.array([380.0, 400.0]))
+
         for i in range(self.OBSTACLE_COUNT):
             obstacle = CircleObstacle()
             x = random.randint(OBSTACLE_X_MIN, OBSTACLE_X_MAX)
             y = random.randint(OBSTACLE_Y_MIN, OBSTACLE_Y_MAX)
             obstacle.position = np.array([float(x), float(y)])
             self.obstacle_list.append(obstacle)
+
         heal_place1 = HealPlace(1)
         heal_place1.position = HEAL_PLACE_SPAWN_1
         self.heal_place_list.append(heal_place1)
@@ -186,6 +216,10 @@ class ServerMain:
             new_player.change_position(np.array([50.0, 400.0]))
         else:
             new_player.change_position(np.array([950.0, 400.0]))
+
+        # FOR MOB TESTING
+        new_player.change_position(np.array([400.0, 400.0]))
+
         position_string = str(new_player.position[0]) + ',' + str(new_player.position[1])
         msg_to_send += position_string
         msg_to_send += "\n\n"
@@ -208,9 +242,9 @@ class ServerMain:
             msg_to_send += "1"
         else:
             msg_to_send += "0"
-        self.net_server.send_message(sock, MessageTypes.Authentication.value, msg_to_send, True)
+        self.net_server.create_and_send_message(sock, MessageTypes.Authentication.value, msg_to_send, True)
         msg_to_others = new_player.player_id + ':' + position_string
-        self.net_server.message_all_but_one(sock, MessageTypes.NewPlayer.value, msg_to_others, True)
+        self.net_server.create_and_message_all_but_one(sock, MessageTypes.NewPlayer.value, msg_to_others, True)
 
     def get_player_for_socket(self, sock):
         for player in self.player_dict.values():
@@ -236,7 +270,7 @@ class ServerMain:
             new_msg.push_bytes(msg_body)
             new_msg.push_float(player.position[0])
             new_msg.push_float(player.position[1])
-            self.net_server.complete_message_all(new_msg)
+            self.net_server.message_all(new_msg)
 
         elif spell_id == SpellTypes.BurningGround.value:
             cast_time = msg.get_double()
@@ -250,7 +284,7 @@ class ServerMain:
             new_msg.set_header_by_id(MessageTypes.CastSpell.value)
             new_msg.push_string(player.player_id)
             new_msg.push_bytes(msg_body)
-            self.net_server.complete_message_all(new_msg)
+            self.net_server.message_all(new_msg)
 
         elif spell_id == SpellTypes.HolyGround.value:
             cast_time = msg.get_double()
@@ -264,7 +298,7 @@ class ServerMain:
             new_msg.set_header_by_id(MessageTypes.CastSpell.value)
             new_msg.push_string(player.player_id)
             new_msg.push_bytes(msg_body)
-            self.net_server.complete_message_all(new_msg)
+            self.net_server.message_all(new_msg)
 
         elif spell_id == SpellTypes.Knockback.value:
             pass
@@ -294,67 +328,22 @@ class ServerMain:
             #                        + str(m_to_check.position[0]) + ',' + str(m_to_check.position[1])
             #self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
 
-    def pause_loop(self, game_over=False, loser_id=""):
-        msg_body = b''
-        if game_over:
-            print("Game over, \"", loser_id, "\" lost!")
-            msg_body += struct.pack("!i", 2)
-            msg_body += struct.pack("!i", len(loser_id))
-            msg_body += loser_id.encode("utf-8")
-        else:
-            msg_body += struct.pack("!i", 1)
-        self.net_server.message_all(MessageTypes.PauseGame.value, msg_body)
-        self.client_ready_counter = 0
-        connections_n = self.net_server.get_connections_n()
-        while self.client_ready_counter < connections_n:
-            self.net_server.process_all_messages()
-        if game_over:
-            print("Resetting map!")
-            self.client_ready_counter = 0
-            self.map_reset()
-            msg_body = self.create_map_reset_msg()
-            self.net_server.message_all(MessageTypes.ResetMap.value, msg_body)
-            while self.client_ready_counter < connections_n:
-                self.net_server.process_all_messages()
-        print("Continuing game!")
-        self.is_paused = False
-        self.last_frame = time.time()
-        self.net_server.message_all(MessageTypes.StartGame.value, b'1')
-
-    def server_loop(self):
-        cur_frame = time.time()
-        self.delta_t = cur_frame - self.last_frame
-        self.last_frame = cur_frame
-        if self.is_fps_on:
-            self.counter_for_fps += self.delta_t
-            if self.counter_for_fps > 2:
-                self.counter_for_fps = 0
-                print("FPS: ", 1 / self.delta_t)
-
-        self.net_server.process_all_messages()
-        self.detect_collisions(cur_frame)
-        for player in self.player_dict.values():
-            player.on_update(self.delta_t)
-        for mob in self.mob_dict.values():
-            mob.on_update(self.delta_t)
-        self.net_server.send_updates()
-
-    def detect_collisions(self, cur_frame):
+    def detect_collisions(self, delta_t):
         player_hp_update_list = []
         mob_hp_update_list = []
         proj_remove_list = []
         mobs_killed_dict = {}  # key, value = mob_id, killer_id
         damage_deal_list = []  # Tuple(dealer_type_id, dmg_dealer, taker_type_id, dmg_taker, amount)
-        hp_gain_list = []  # Tuple(player, amount)
+        hp_gain_list = []      # Tuple(player, amount)
 
-        self.mob_aggro_timer += self.delta_t
+        self.mob_aggro_timer += delta_t
         if self.mob_aggro_timer > 0.2:
             self.mob_aggro_timer = 0
             players_hit = self.mob_detect(damage_deal_list)
             player_hp_update_list.extend(players_hit)
 
         for proj in self.projectile_list:
-            proj.on_update(self.delta_t)
+            proj.on_update(delta_t)
             self.check_projectile(proj, player_hp_update_list, mob_hp_update_list, proj_remove_list,
                                   mobs_killed_dict, damage_deal_list)
         if len(proj_remove_list) > 0:
@@ -366,22 +355,23 @@ class ServerMain:
                 msg.push_string(proj.owner)
                 msg.push_double(proj.cast_time)
                 self.projectile_list.remove(proj)
-            self.net_server.complete_message_all(msg)
+            self.net_server.message_all(msg)
 
         aoe_remove_list = []
         for aoe in self.aoe_list:
-            time_on = cur_frame - aoe.cast_time
-            if aoe.duration < time_on:
+            is_over, is_tick = aoe.on_update(delta_t)
+            if is_over:
                 aoe_remove_list.append(aoe)
             else:
-                if time_on > aoe.counter:
-                    aoe.counter += 1
+                if is_tick:
                     if aoe.beneficial:
                         for player in self.player_dict.values():
                             if aoe.owner == player.player_id:
                                 if c2c_hit_detection(player.position, aoe.position, player.radius, aoe.radius):
+                                    pre_change_hp = player.health
                                     player.update_health(player.health + int(aoe.health_modifier))
-                                    hp_gain_list.append((aoe.owner, int(aoe.health_modifier)))
+                                    hp_change = player.health - pre_change_hp
+                                    hp_gain_list.append((aoe.owner, hp_change))
                                     if player not in player_hp_update_list:
                                         player_hp_update_list.append(player)
                     else:
@@ -412,15 +402,15 @@ class ServerMain:
                 msg.push_string(aoe.owner)
                 msg.push_double(aoe.cast_time)
                 self.aoe_list.remove(aoe)
-            self.net_server.complete_message_all(msg)
+            self.net_server.message_all(msg)
 
         for heal_place in self.heal_place_list:
-            for player in self.player_dict.values():
-                if c2r_hit_detection(player.position, player.radius,
-                                     heal_place.position, heal_place.ver_len, heal_place.hor_len):
-                    cur_frame = time.time()
-                    if (cur_frame - heal_place.cd_start) > heal_place.cd_duration:
-                        heal_place.cd_start = cur_frame
+            heal_place.on_update(delta_t)
+            if heal_place.available:
+                for player in self.player_dict.values():
+                    if c2r_hit_detection(player.position, player.radius,
+                                         heal_place.position, heal_place.ver_len, heal_place.hor_len):
+                        heal_place.use()
                         player.gain_health(HEAL_PLACE_HP_GAIN)
                         hp_gain_list.append((player.player_id, HEAL_PLACE_HP_GAIN))
                         if player not in player_hp_update_list:
@@ -430,7 +420,7 @@ class ServerMain:
                         msg.push_int(ObjectIds.HealPlace.value)
                         msg.push_int(1)
                         msg.push_int(heal_place.id)
-                        self.net_server.complete_message_all(msg)
+                        self.net_server.message_all(msg)
 
         for obs in self.obstacle_list:
             for player in self.player_dict.values():
@@ -449,7 +439,7 @@ class ServerMain:
             for mob in mob_hp_update_list:
                 msg.push_int(mob.mob_id)
                 msg.push_int(mob.health)
-            self.net_server.complete_message_all(msg)
+            self.net_server.message_all(msg)
 
         if len(mobs_killed_dict) > 0:
             msg = Message()
@@ -462,7 +452,7 @@ class ServerMain:
                         player.gain_exp(MOB_KILL_XP_GAIN)
                 msg.push_string(killer)
                 msg.push_int(mob_id)
-            self.net_server.complete_message_all(msg)
+            self.net_server.message_all(msg)
 
         if len(damage_deal_list) > 0 or len(hp_gain_list) > 0:
             msg = Message()
@@ -478,11 +468,11 @@ class ServerMain:
             for hg_tuple in hp_gain_list:
                 msg.push_string(hg_tuple[0])
                 msg.push_int(hg_tuple[1])
-            self.net_server.complete_message_all(msg)
+            self.net_server.message_all(msg)
 
         for player in player_hp_update_list:
             if player.health <= 0:
-                self.pause_loop(game_over=True, loser_id=player.player_id)
+                self.end_game(player.player_id)
 
     def check_projectile(self, proj, player_hp_update_list, mob_hp_update_list, proj_remove_list,
                          mobs_killed_dict, damage_deal_list):
@@ -527,17 +517,16 @@ class ServerMain:
             for player in self.player_dict.values():
                 if c2c_hit_detection(player.position, mob.position, player.radius, mob.detect_range):
                     if c2c_hit_detection(player.position, mob.position, player.radius, mob.attack_range):
-                        cur_time = time.time()
-                        if (cur_time - mob.attack_cd_start) > mob.attack_cooldown:
-                            mob.attack_cd_start = cur_time
+                        mob.stop()
+                        mob_move_list.append(mob)
+                        if mob.is_attack_ready():
                             player.lose_health(mob.attack_damage)
                             players_hit.append(player)
                             damage_deal_list.append((ObjectIds.Mob.value, mob.mob_id,
                                                      ObjectIds.Player.value, player.player_id,
                                                      mob.attack_damage))
                     else:
-                        mob.move_to = player.position
-                        mob.update_front()
+                        mob.set_move_to(player.position)
                         mob_move_list.append(mob)
         if len(mob_move_list) > 0:
             msg = Message()
@@ -549,8 +538,76 @@ class ServerMain:
                 msg.push_float(mob.move_to[1])
                 msg.push_float(mob.position[0])
                 msg.push_float(mob.position[1])
-            self.net_server.complete_message_all(msg)
+            self.net_server.message_all(msg)
         return players_hit
+
+    def update_world(self, delta_t):
+        if self.is_fps_on:
+            self.counter_for_fps += delta_t
+            if self.counter_for_fps > 2:
+                self.counter_for_fps = 0
+                print("FPS: ", 1 / delta_t)
+
+        self.detect_collisions(delta_t)
+        for player in self.player_dict.values():
+            player.on_update(delta_t)
+        for mob in self.mob_dict.values():
+            mob.on_update(delta_t)
+        self.net_server.send_updates()
+
+    def end_game(self, loser_id):
+        self.is_game_over = True
+        msg = Message()
+        msg.set_header_by_id(MessageTypes.GameOver.value)
+        msg.push_string(loser_id)
+        self.net_server.message_all(msg)
+
+        print("Resetting map!")
+        self.client_ready_counter = 0
+        self.map_reset()
+        msg_body = self.create_map_reset_msg()
+        self.net_server.create_and_message_all(MessageTypes.ResetMap.value, msg_body)
+
+    def update_game_over(self):
+        if self.client_ready_counter >= self.PLAYER_COUNT:
+            self.is_game_over = False
+            self.net_server.create_and_message_all(MessageTypes.StartGame.value, b'1')
+            print("Starting new game!")
+
+    def pause_game(self):
+        print("Paused game!")
+        self.is_paused = True
+        self.unpause_ready_counter = 0
+        self.connection_num_at_pause = self.net_server.get_connections_n()
+        msg = Message()
+        msg.set_header_by_id(MessageTypes.PauseGame.value)
+        msg.push_bytes(b'1')
+        self.net_server.message_all(msg)
+
+    def update_pause(self):
+        if self.unpause_ready_counter >= self.connection_num_at_pause:
+            self.is_paused = False
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.UnpauseGame.value)
+            msg.push_bytes(b'1')
+            self.net_server.message_all(msg)
+            print("Resuming game!")
+
+    def run(self):
+        while not self.is_stop:
+            cur_frame = time.time()
+            delta_t = cur_frame - self.last_frame
+            self.last_frame = cur_frame
+
+            self.net_server.process_all_messages()
+
+            if not self.is_paused:
+                if not self.is_game_over:
+                    self.update_world(delta_t)
+                else:
+                    self.update_game_over()
+            else:
+                self.update_pause()
 
 
 class AuthenticatedClient(Player):

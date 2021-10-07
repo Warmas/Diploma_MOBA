@@ -33,11 +33,12 @@ class ClientMain:
         self.is_fps_on = True
         self.is_auth_comp = False
         self.is_first_player = False
-        self.start_game = False
+        self.is_start_game = False
         self.is_paused = False
+        self.is_game_over = False
 
         self.renderer = Renderer(is_displayed,
-                                 self.game_loop,
+                                 self.run,
                                  self.keyboard_callback, self.mouse_callback,
                                  self.user_player,
                                  self.player_dict,
@@ -47,8 +48,6 @@ class ClientMain:
                                  self.projectile_dict,
                                  self.aoe_dict)
 
-        # self.ai_time = 0
-
     def start(self):
         # self.net_thread = threading.Thread(target=self.net_client.start_connection, args=("127.0.0.1", 54321))
         # self.net_thread.start()
@@ -56,11 +55,8 @@ class ClientMain:
         while not self.net_client.get_connection_state():
             pass
         self.ping_server()
-        self.net_client.send_message(MessageTypes.Authentication.value, self.player_id, True)
+        self.net_client.create_and_send_message(MessageTypes.Authentication.value, self.player_id, True)
         while not self.is_auth_comp:
-            self.process_incoming_messages()
-        self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
-        while not self.start_game:
             self.process_incoming_messages()
         self.renderer.start()
 
@@ -69,7 +65,7 @@ class ClientMain:
 
     def ping_server(self):
         msg_body = struct.pack("!d", time.time())
-        self.net_client.send_message(MessageTypes.PingServer.value, msg_body)
+        self.net_client.create_and_send_message(MessageTypes.PingServer.value, msg_body)
 
     def process_incoming_messages(self):
         self.net_client.process_all_messages()
@@ -87,7 +83,6 @@ class ClientMain:
             self.stop()
 
         elif msg_id == MessageTypes.Authentication.value:
-            print("Authentication complete")
             msg_data = msg.get_body_as_string().split("\n\n")
             pos = msg_data[0].split(',')
             x_mp = float(pos[0])
@@ -121,7 +116,6 @@ class ClientMain:
                 x_mt = float(move_to[0])
                 y_mt = float(move_to[1])
                 mob.set_move_to(np.array([x_mt, y_mt]))
-                mob.new_front(mob.move_to)
                 self.mob_dict[mob.mob_id] = mob
             obstacle_data_list = msg_data[3].split('\n')
             for obs_data in obstacle_data_list[1:]:
@@ -145,6 +139,8 @@ class ClientMain:
                 self.is_first_player = True
                 self.select_trainer()
             self.is_auth_comp = True
+            self.net_client.create_and_send_message(MessageTypes.ClientReady.value, b'1')
+            print("Authentication complete")
 
         elif msg_id == MessageTypes.NewPlayer.value:
             print("New player joined!")
@@ -190,7 +186,6 @@ class ClientMain:
                 mob = self.mob_dict[mob_id]
                 mob.position = np.array([x_p, y_p])
                 mob.set_move_to(np.array([x_mt, y_mt]))
-                mob.update_front()
 
         elif msg_id == MessageTypes.CastSpell.value:
             player_id = msg.get_string()
@@ -301,19 +296,24 @@ class ClientMain:
 
         elif msg_id == MessageTypes.StartGame.value:
             self.start_game_callback()
-            self.start_game = True
+            self.is_start_game = True
+            self.is_game_over = False
+            print("Starting game!")
+
+        elif msg_id == MessageTypes.GameOver.value:
+            loser_id = msg.get_string()
+            self.end_game(loser_id)
 
         elif msg_id == MessageTypes.ResetMap.value:
             self.map_reset_callback(msg)
 
         elif msg_id == MessageTypes.PauseGame.value:
             if not self.is_paused:
-                game_over = False
-                loser_id = ""
-                if msg.get_int() == 2:
-                    game_over = True
-                    loser_id = msg.get_string()
-                self.pause_loop(game_over, loser_id)
+                self.pause_game()
+
+        elif msg_id == MessageTypes.UnpauseGame.value:
+            self.is_paused = False
+            print("Resuming game!")
 
         # AI client messages
         self.process_agent_message(msg_id, msg)
@@ -372,14 +372,8 @@ class ClientMain:
             new_h_place = HealPlace(h_place_id, h_place_pos)
             self.heal_place_list.append(new_h_place)
 
-        self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
-
-    def pause_loop(self, game_over=False, loser_id=""):
-        if loser_id == self.user_player.player_id:
-            print("You lost!")
-        else:
-            print("You won!")
-        self.stop()
+        self.net_client.create_and_send_message(MessageTypes.ClientReady.value, b'1')
+        print("Reset map finished!")
 
     def keyboard_callback(self, key, mouse_x, mouse_y):
         if key == KeyIds.Key_1.value:
@@ -399,9 +393,9 @@ class ClientMain:
             print(data)
             # Save picture
             image = Image.frombytes('RGB', (1000, 800), data.tobytes())
-            image = image.transpose(Image.FLIP_TOP_BOTTOM)
             image = image.resize((250, 200))
-            image.save("test_image8.png", "PNG")
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            image.save("test_image.png", "PNG")
             print('Saved image to %s' % (os.path.abspath("test_image.png")))
 
             # print("Close server")
@@ -417,7 +411,7 @@ class ClientMain:
             msg.push_float(float(mouse_y))
             send_time = time.time()
             msg.push_double(send_time)
-            self.net_client.send_complete_message(msg)
+            self.net_client.send_message(msg)
 
     def cast_1(self, mouse_x, mouse_y):
         cur_time = time.time()
@@ -436,7 +430,7 @@ class ClientMain:
             # msg.push_float(self.player.position[1])
             msg.push_float(float(mouse_x))
             msg.push_float(float(mouse_y))
-            self.net_client.send_complete_message(msg)
+            self.net_client.send_message(msg)
 
     def cast_2(self, mouse_x, mouse_y):
         cur_time = time.time()
@@ -448,7 +442,7 @@ class ClientMain:
             msg.push_double(cur_time)
             msg.push_float(float(mouse_x))
             msg.push_float(float(mouse_y))
-            self.net_client.send_complete_message(msg)
+            self.net_client.send_message(msg)
 
     def cast_3(self, mouse_x, mouse_y):
         cur_time = time.time()
@@ -460,7 +454,7 @@ class ClientMain:
             msg.push_double(cur_time)
             msg.push_float(float(mouse_x))
             msg.push_float(float(mouse_y))
-            self.net_client.send_complete_message(msg)
+            self.net_client.send_message(msg)
 
     def cast_4(self, x, y):
         cur_time = time.time()
@@ -479,33 +473,20 @@ class ClientMain:
             # msg_body += ';' + str(cur_time)  # no game object no id/cast_time required
             msg_body += ';' + str(self.user_player.front[0]) + ',' + str(self.user_player.front[1])
             # Like with projectiles here either this position or the server-side position can be used.
-            self.net_client.send_message(MessageTypes.CastSpell.value, msg_body, True)
+            self.net_client.create_and_send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def mob_kill(self, killer_id, mob_id):
         self.mob_dict.pop(mob_id)
         is_lvl_up = self.player_dict[killer_id].gain_exp(MOB_KILL_XP_GAIN)
         self.agent_mob_kill(killer_id, is_lvl_up)
 
-    def game_loop(self):
-        cur_frame = time.time()
-        delta_t = cur_frame - self.last_frame
-        self.last_frame = cur_frame
+    def update_world(self, delta_t):
         if self.is_fps_on:
             self.counter_for_fps += delta_t
             if self.counter_for_fps > 2:
                 self.counter_for_fps = 0
-                print("FPS: ", 1 / delta_t)
+                #print("FPS: ", 1 / delta_t)
 
-        self.process_incoming_messages()
-
-        self.world_update(delta_t)
-
-        # pre_render = time.time()
-        self.renderer.render()
-        # aft_render = time.time()
-        # print("Render time: ", aft_render - pre_render)
-
-    def world_update(self, delta_t):
         for heal_place in self.heal_place_list:
             heal_place.on_update(delta_t)
 
@@ -521,6 +502,54 @@ class ClientMain:
             mob.on_update(delta_t)
         for proj in self.projectile_dict.values():
             proj.on_update(delta_t)
+
+    def end_game(self, loser_id=""):
+        self.is_game_over = True
+        if loser_id == self.user_player.player_id:
+            print("You lost!")
+        else:
+            print("You won!")
+        self.stop()
+
+    def update_game_over(self):
+        pass
+
+    def pause_game(self):
+        print("Paused game!")
+        self.is_paused = True
+
+    def update_pause(self):
+        pass
+
+    def pre_world_update(self, delta_t):
+        pass
+
+    def post_render(self, cur_frame):
+        pass
+
+    def run(self):
+        cur_frame = time.time()
+        delta_t = cur_frame - self.last_frame
+        self.last_frame = cur_frame
+
+        self.process_incoming_messages()
+
+        if not self.is_paused:
+            if not self.is_game_over and self.is_start_game:
+                self.pre_world_update(delta_t)
+                self.update_world(delta_t)
+            else:
+                self.update_game_over()
+        else:
+            self.update_pause()
+
+        # pre_render = time.time()
+        self.renderer.render()
+        # aft_render = time.time()
+        # print("Render time: ", aft_render - pre_render)
+        if not self.is_paused:
+            if not self.is_game_over:
+                self.post_render(cur_frame)
 
 
 def start_client(client_id="Ben"):

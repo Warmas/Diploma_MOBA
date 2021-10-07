@@ -15,16 +15,17 @@ from PIL import Image
 import io
 
 
-# Designed for handling 2 players
+# Designed for handling 1 or 2 players
 class AiClientMain(ClientMain):
     def __init__(self, player_id, is_training, is_displayed, is_load_weights, weight_file, optimizer_file):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.enemy_player = None
 
-        self.MAX_EPISODE_N = 30
+        self.MAX_EPISODE_N = 100
         self.CHECKPOINT_EP_N = 50
 
         self.is_training = is_training
+        self.is_optimizer = False
         self.device = None
         self.agent_trainer = None
         self.AGENT_WEIGHT_PATH_ROOT = "AI_Client/neural_nets/weights/ppo/"
@@ -57,6 +58,7 @@ class AiClientMain(ClientMain):
         self.agent_frame_time = 0
         self.AGENT_FRAME_DELAY = 0.15
         self.cur_reward = 0
+        # self.ai_time = 0
 
         # TESTING
         self.test_counter = 0
@@ -71,6 +73,8 @@ class AiClientMain(ClientMain):
         for player in self.player_dict.values():
             if not player.player_id == self.user_player.player_id:
                 self.enemy_player = player
+        if self.is_first_player:
+            self.is_optimizer = True
 
     def process_agent_message(self, msg_id, msg):
         if msg_id == MessageTypes.TransitionData.value:
@@ -111,30 +115,6 @@ class AiClientMain(ClientMain):
             if is_lvl_up:
                 self.cur_reward += LVL_UP_REWARD
 
-    def pause_loop(self, game_over=False, loser_id=""):
-        self.is_paused = True
-        print("Paused game.")
-        self.start_game = False
-        self.steps_done = 0
-        if game_over:
-            if loser_id == self.user_player.player_id:
-                self.agent_trainer.memory.reward_list[-1] += LOSE_REWARD
-                print("You lost!")
-            else:
-                self.agent_trainer.memory.reward_list[-1] += WIN_REWARD
-                print("You won!")
-        started_transfer = False
-        while not self.start_game:
-            self.process_incoming_messages()
-            if not self.is_first_player:
-                if not started_transfer:
-                    started_transfer = True
-                    print("Transfering transitions...")
-                    self.do_transfer()
-        self.is_paused = False
-        self.last_frame = time.time()
-        print("Continuing game!")
-
     def do_transfer(self):
         # msg = Message()
         # msg.set_header_by_id(MessageTypes.TransitionData.value)
@@ -173,9 +153,9 @@ class AiClientMain(ClientMain):
             # msg.push_int(len(image_bytes))
             # msg.push_bytes(image_bytes)
 
-            self.net_client.send_complete_message(msg)
+            self.net_client.send_message(msg)
         self.agent_trainer.clear_memory()
-        self.net_client.send_message(MessageTypes.TransferDone.value, b'1')
+        self.net_client.create_and_send_message(MessageTypes.TransferDone.value, b'1')
 
     def transition_data_process(self, msg):
         # num_trans = msg.get_int()
@@ -219,22 +199,23 @@ class AiClientMain(ClientMain):
             print("Image received: ", tran_n)
 
     def transfer_done_callback(self):
+        self.steps_done = 0
         print("Optimization started...")
         actor_loss_list, critic_loss_list, combined_loss_list, \
         disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list = \
             self.agent_trainer.optimize_models()
-        #print("Actor loss: ", actor_loss_list,
+        # print("Actor loss: ", actor_loss_list,
         #      "\n\nCritic loss: ", critic_loss_list,
         #      "\n\nCombined loss:", combined_loss_list,
         #      "\n\nDiscrete action loss:", disc_act_loss_list,
         #      "\n\nContinuous action loss:", cont_act_loss_list,
         #      "\n\nDiscrete entropy loss:", disc_entropy_loss_list,
         #      "\n\nContinuous entropy loss:", cont_entropy_loss_list)
-        #print("Reward sums: ", reward_sum_list)
-        #print("Total reward: ", sum(reward_sum_list))
+        # print("Reward sums: ", reward_sum_list)
+        # print("Total reward: ", sum(reward_sum_list))
         finished_episode = self.agent_trainer.cur_episode_n - 1
         print("Finished episode: ", finished_episode)
-        if finished_episode <= self.MAX_EPISODE_N:
+        if finished_episode < self.MAX_EPISODE_N:
             print("Saving models...")
             # We don't really need checkpoints as we have to save each episode anyway
             self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
@@ -245,55 +226,72 @@ class AiClientMain(ClientMain):
                     "checkpoint_optimizer_" + str(self.CHECKPOINT_EP_N), self.OPTIMIZER_PATH_ROOT)
             print("Saved models!")
             self.agent_trainer.clear_memory()
-            self.net_client.send_message(MessageTypes.OptimizeDone.value, b'1')
-            self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
+            self.net_client.create_and_send_message(MessageTypes.OptimizeDone.value, b'1')
         else:
             print("Saving final agent...")
             self.agent_trainer.shutdown(self.AGENT_WEIGHT_PATH_ROOT + "final_agent")
             print("Saved final agent!")
-            self.net_client.send_message(MessageTypes.CloseGame.value, b'1')
+            self.net_client.create_and_send_message(MessageTypes.CloseGame.value, b'1')
 
     def optimize_done_callback(self):
-        print("Loading new models...")
-        self.agent.load_brain_weights("temp_agent.pth", self.AGENT_WEIGHT_PATH_ROOT)
-        self.net_client.send_message(MessageTypes.ClientReady.value, b'1')
-        print("Loaded new models!")
+        if not self.is_optimizer:
+            print("Loading new models...")
+            weight_path = self.AGENT_WEIGHT_PATH_ROOT + "temp_agent.pth"
+            self.agent.load_brain_weights(weight_path, is_training=True)
+            print("Loaded new models!")
+        self.net_client.create_and_send_message(MessageTypes.UnpauseGame.value, b'1')
 
-    def game_loop(self):
-        cur_frame = time.time()
-        delta_t = cur_frame - self.last_frame
-        self.last_frame = cur_frame
-        if self.is_fps_on:
-            self.counter_for_fps += delta_t
-            if self.counter_for_fps > 2:
-                self.counter_for_fps = 0
-                #print("FPS: ", 1 / delta_t)
-                #print("Steps done: ", self.steps_done)
+    def end_game(self, loser_id=""):
+        if loser_id == self.user_player.player_id:
+            print("You lost!")
+            if self.is_training:
+                if len(self.agent_trainer.memory.reward_list) > 0:
+                    self.agent_trainer.memory.reward_list[-1] += LOSE_REWARD
+                else:
+                    self.agent_trainer.memory.reward_list.append(LOSE_REWARD)
+        else:
+            print("You won!")
+            if self.is_training:
+                if len(self.agent_trainer.memory.reward_list) > 0:
+                    self.agent_trainer.memory.reward_list[-1] += WIN_REWARD
+                else:
+                    self.agent_trainer.memory.reward_list.append(WIN_REWARD)
+        if self.is_training:
+            self.pause_game()
 
-        # TESTING
-        self.test_counter += delta_t
-        if self.test_counter > 5:
-            self.test_counter = 0
-            self.test_num += 1
-            if self.test_num > 2:
-                self.test_num = 0
-            if self.test_num == 0:
-                print("+++Current shape: TRIANGLE")
-            elif self.test_num == 1:
-                print("+++Current shape: RECTANGLE")
-            elif self.test_num == 2:
-                print("+++Current shape: CIRCLE")
-            self.renderer.test_num = self.test_num
-
+    def pause_game(self):
+        self.net_client.create_and_send_message(MessageTypes.PauseGame.value, b'1')
+        print("Paused game!")
+        self.is_paused = True
         self.process_incoming_messages()
+        if not self.is_optimizer:
+            print("Transferring transitions...")
+            self.do_transfer()
 
-        self.world_update(delta_t)
+        # TESTING MOBS
+        msg = Message()
+        msg.set_header_by_id(MessageTypes.TransferDone.value)
+        msg.push_bytes(b'1')
+        self.net_client.send_message(msg)
 
-        # pre_render = time.time()
-        self.renderer.render()
-        # aft_render = time.time()
-        # print("Render: ", aft_render - pre_render)
+    def pre_world_update(self, delta_t):
+        pass
+        # # FOR TESTING SHAPES
+        # self.test_counter += delta_t
+        # if self.test_counter > 5:
+        #     self.test_counter = 0
+        #     self.test_num += 1
+        #     if self.test_num > 2:
+        #         self.test_num = 0
+        #     if self.test_num == 0:
+        #         print("+++Current shape: TRIANGLE")
+        #     elif self.test_num == 1:
+        #         print("+++Current shape: RECTANGLE")
+        #     elif self.test_num == 2:
+        #         print("+++Current shape: CIRCLE")
+        #     self.renderer.test_num = self.test_num
 
+    def post_render(self, cur_frame):
         # Observe frames with frame delay so we use less memory
         if cur_frame - self.agent_frame_time > self.AGENT_FRAME_DELAY:
             self.agent_frame_time = cur_frame
@@ -313,73 +311,84 @@ class AiClientMain(ClientMain):
 
             mouse_x = action.mouse_x
             mouse_y = action.mouse_y
-            is_show_choice = False
-            if cur_frame - self.test_display_counter > 0.5:
-                self.test_display_counter = cur_frame
-                is_show_choice = True
+
+            # # FOR TESTING SHAPES
+            # is_show_choice = False
+            # if cur_frame - self.test_display_counter > 0.5:
+            #     self.test_display_counter = cur_frame
+            #     is_show_choice = True
+
             if action.disc_action == 0:
-                # TESTING
-                if is_show_choice:
-                    print("---Choosing TRIANGLE---")
-                if self.test_num == 0:
-                    self.cur_reward += TEST_REWARD
-                else:
-                    self.cur_reward -= TEST_REWARD
-                # print("---Choosing 0---")
+                self.cur_reward -= TEST_REWARD
                 pass
+                # print("---Choosing 0---")
+                # # FOR TESTING SHAPES
+                # if is_show_choice:
+                #     print("---Choosing TRIANGLE---")
+                # if self.test_num == 0:
+                #     self.cur_reward += TEST_REWARD
+                # else:
+                #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 1:
-                self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
-                # TESTING
-                if is_show_choice:
-                    print("---Choosing RECTANGLE---")
-                if self.test_num == 1:
-                    self.cur_reward += TEST_REWARD
-                else:
-                    self.cur_reward -= TEST_REWARD
+                self.cur_reward -= TEST_REWARD
+                pass # TESTING
+                # self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
                 # print("---Choosing 1---")
+                # # FOR TESTING SHAPES
+                # if is_show_choice:
+                #     print("---Choosing RECTANGLE---")
+                # if self.test_num == 1:
+                #     self.cur_reward += TEST_REWARD
+                # else:
+                #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 2:
                 self.cast_1(mouse_x, mouse_y)
-                # TESTING
-                if is_show_choice:
-                    print("---Choosing CIRCLE---")
-                if self.test_num == 2:
-                    self.cur_reward += TEST_REWARD
-                else:
-                    self.cur_reward -= TEST_REWARD
+                print("---Casting fireball")
                 # print("---Choosing 2---")
+                # FOR TESTING SHAPES
+                # if is_show_choice:
+                #     print("---Choosing CIRCLE---")
+                # if self.test_num == 2:
+                #     self.cur_reward += TEST_REWARD
+                # else:
+                #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 3:
                 self.cast_2(mouse_x, mouse_y)
-                # TESTING
-                if is_show_choice:
-                    print("---Choosing NONE1---")
-                self.cur_reward -= (TEST_REWARD * 4)
+                self.cur_reward -= TEST_REWARD
                 # print("---Choosing 3---")
+                # # FOR TESTING SHAPES
+                # if is_show_choice:
+                #     print("---Choosing NONE1---")
+                # self.cur_reward -= (TEST_REWARD * 4)
             elif action.disc_action == 4:
                 self.cast_3(mouse_x, mouse_y)
-                # TESTING
-                if is_show_choice:
-                    print("---Choosing NONE2---")
-                self.cur_reward -= (TEST_REWARD * 4)
+                self.cur_reward -= TEST_REWARD
                 # print("---Choosing 4---")
+                # # FOR TESTING SHAPES
+                # if is_show_choice:
+                #     print("---Choosing NONE2---")
+                # self.cur_reward -= (TEST_REWARD * 4)
             elif action.disc_action == 5:
                 self.cast_4(mouse_x, mouse_y)
-                # TESTING
-                if is_show_choice:
-                    print("---Choosing NONE3---")
-                self.cur_reward -= (TEST_REWARD * 4)
+                self.cur_reward -= TEST_REWARD
                 # print("---Choosing 5---")
+                # # FOR TESTING SHAPES
+                # if is_show_choice:
+                #     print("---Choosing NONE3---")
+                # self.cur_reward -= (TEST_REWARD * 4)
 
             if self.is_training:
                 self.steps_done += 1
                 transition = Transition(state, action.disc_action, self.cur_reward, act_prob)
                 self.cur_reward = 0
                 if not self.agent_trainer.memory.push(transition):
-                    print("Training memory full")
-                    self.net_client.send_message(MessageTypes.PauseGame.value, b'1')
-                    self.pause_loop()
-            # aft_ai = time.time()
-            # self.ai_time = aft_ai - aft_render
-            # print("AI time: ", aft_ai - aft_render)
+                    print("Training memory full!")
+                    # TESTING
+                    self.net_client.create_and_send_message(MessageTypes.GameOver.value, b'1')
+                    #self.pause_game()
+            # pre_ai = time.time()
+            # self.ai_time = aft_ai - pre_ai
+            # print("AI time: ", aft_ai - pre_ai)
         else:
             pass
             # self.ai_time = 0

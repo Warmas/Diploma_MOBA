@@ -77,31 +77,31 @@ class Server:
             self.messages_in.pop_left()
             self.process_message_callback(msg)
 
-    def send_message(self, sock, msg_id, msg_body, is_body_string=False):
+    def send_message(self, sock, msg):
+        self.connection_object.send_message(sock, msg)
+
+    def message_all(self, msg):
+        for sock in self.connection_list:
+            self.send_message(sock, msg)
+
+    def create_and_send_message(self, sock, msg_id, msg_body, is_body_string=False):
         msg = Message()
         msg.set_message(msg_id, msg_body, is_body_string)
         self.connection_object.send_message(sock, msg)
 
-    def send_complete_message(self, sock, msg):
-        self.connection_object.send_message(sock, msg)
-
-    def message_all(self, msg_id, msg_body, is_body_string=False):
+    def create_and_message_all(self, msg_id, msg_body, is_body_string=False):
         for sock in self.connection_list:
-            self.send_message(sock, msg_id, msg_body, is_body_string)
+            self.create_and_send_message(sock, msg_id, msg_body, is_body_string)
 
-    def complete_message_all(self, msg):
-        for sock in self.connection_list:
-            self.send_complete_message(sock, msg)
-
-    def message_all_but_one(self, ignore, msg_id, msg_body, is_body_string=False):
+    def create_and_message_all_but_one(self, ignore, msg_id, msg_body, is_body_string=False):
         for sock in self.connection_list:
             if not sock == ignore:
-                self.send_message(sock, msg_id, msg_body, is_body_string)
+                self.create_and_send_message(sock, msg_id, msg_body, is_body_string)
 
     # Unused, may be used later but unlikely.
     def send_updates(self):
         for msg in self.updates_out:
-            self.message_all(msg.id, msg.body)
+            self.message_all(msg)
         self.updates_out.clear()
 
     def get_connections_n(self):
