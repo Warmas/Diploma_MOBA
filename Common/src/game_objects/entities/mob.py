@@ -8,9 +8,9 @@ class Mob(entity.Entity):
         self.attack_damage = 5
         self.attack_range = 30
         self.detect_range = 100
-        self.attack_cooldown = 1
-        self.attack_cd_start = 0
-        self.attack_cd_left = 0
+        self.attack_cooldown = 1.0
+        self.attack_cd_start = 0.0
+        self.attack_cd_left = 0.0
 
     def on_update(self, delta_t):
         self.move(delta_t)
@@ -26,4 +26,5 @@ class Mob(entity.Entity):
     def is_attack_ready(self):
         if self.attack_cd_left > 0:
             return False
-        return True
+        else:
+            return True

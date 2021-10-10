@@ -21,7 +21,7 @@ class AiClientMain(ClientMain):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.enemy_player = None
 
-        self.MAX_EPISODE_N = 100
+        self.MAX_EPISODE_N = 500
         self.CHECKPOINT_EP_N = 50
 
         self.is_training = is_training
@@ -114,6 +114,10 @@ class AiClientMain(ClientMain):
             self.cur_reward += MOB_KILL_REWARD
             if is_lvl_up:
                 self.cur_reward += LVL_UP_REWARD
+
+    def player_moveto_callback(self, player_id):
+        if player_id == self.user_player.player_id:
+            self.cur_reward += MOVE_REWARD
 
     def do_transfer(self):
         # msg = Message()
@@ -341,7 +345,7 @@ class AiClientMain(ClientMain):
                 # else:
                 #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 2:
-                self.cast_1(mouse_x, mouse_y)# 
+                self.cast_1(mouse_x, mouse_y)#
                 # print("---Choosing 2---")
                 # FOR TESTING SHAPES
                 # if is_show_choice:

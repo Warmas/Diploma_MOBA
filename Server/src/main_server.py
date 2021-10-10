@@ -520,6 +520,7 @@ class ServerMain:
                         mob.stop()
                         mob_move_list.append(mob)
                         if mob.is_attack_ready():
+                            mob.attack()
                             player.lose_health(mob.attack_damage)
                             players_hit.append(player)
                             damage_deal_list.append((ObjectIds.Mob.value, mob.mob_id,

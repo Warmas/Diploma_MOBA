@@ -41,7 +41,7 @@ class Entity:
                 self.position = self.front * float(self.speed) * delta_t + self.position
             else:
                 self.position = self.front * float(self.speed) * self.col_speed_mod * delta_t + self.position
-            if np.linalg.norm(self.position - original_pos) > np.linalg.norm(self.move_to - original_pos):
+            if g.distance(self.position, original_pos) > g.distance(self.move_to, original_pos):
                 self.position = self.move_to
                 self.stop()
         else:

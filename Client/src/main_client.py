@@ -174,6 +174,7 @@ class ClientMain:
             # if should_post:
             #     print("Player move delay: ", cur_time - send_time, " s")
             #     print("AI time: ", self.ai_time)
+            self.player_moveto_callback(player_id)
 
         elif msg_id == MessageTypes.MobsMoveTo.value:
             num_mob_move_updates = msg.get_int()
@@ -328,6 +329,9 @@ class ClientMain:
         pass
 
     def agent_mob_kill(self, killer_id, is_lvl_up):
+        pass
+
+    def player_moveto_callback(self, player_id):
         pass
 
     def map_reset_callback(self, msg):
