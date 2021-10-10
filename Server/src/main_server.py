@@ -19,9 +19,9 @@ from Common.src.game_constants import *
 
 class ServerMain:
     def __init__(self):
-        self.PLAYER_COUNT = 1    # TESTING
-        self.MOB_COUNT = 0       # TESTING
-        self.OBSTACLE_COUNT = 0  # TESTING
+        self.PLAYER_COUNT = 2
+        self.MOB_COUNT = 12
+        self.OBSTACLE_COUNT = 4
 
         self.net_server = net.Server(self.process_message, self.connection_lost)
         self.player_dict = {}
@@ -153,18 +153,18 @@ class ServerMain:
             self.mob_dict[i] = mob
 
         # FOR TESTING MOBS
-        self.mob_dict[0] = Mob(0)
-        self.mob_dict[0].change_position(np.array([500.0, 400.0]))
-        self.mob_dict[1] = Mob(1)
-        self.mob_dict[1].change_position(np.array([500.0, 500.0]))
-        self.mob_dict[2] = Mob(2)
-        self.mob_dict[2].change_position(np.array([500.0, 300.0]))
-        self.mob_dict[3] = Mob(3)
-        self.mob_dict[3].change_position(np.array([400.0, 600.0]))
-        self.mob_dict[4] = Mob(4)
-        self.mob_dict[4].change_position(np.array([400.0, 200.0]))
-        for player in self.player_dict.values():
-            player.change_position(np.array([380.0, 400.0]))
+        # self.mob_dict[0] = Mob(0)
+        # self.mob_dict[0].change_position(np.array([500.0, 400.0]))
+        # self.mob_dict[1] = Mob(1)
+        # self.mob_dict[1].change_position(np.array([500.0, 500.0]))
+        # self.mob_dict[2] = Mob(2)
+        # self.mob_dict[2].change_position(np.array([500.0, 300.0]))
+        # self.mob_dict[3] = Mob(3)
+        # self.mob_dict[3].change_position(np.array([400.0, 600.0]))
+        # self.mob_dict[4] = Mob(4)
+        # self.mob_dict[4].change_position(np.array([400.0, 200.0]))
+        # for player in self.player_dict.values():
+        #     player.change_position(np.array([380.0, 400.0]))
 
         for i in range(self.OBSTACLE_COUNT):
             obstacle = CircleObstacle()
@@ -218,7 +218,7 @@ class ServerMain:
             new_player.change_position(np.array([950.0, 400.0]))
 
         # FOR MOB TESTING
-        new_player.change_position(np.array([400.0, 400.0]))
+        # new_player.change_position(np.array([400.0, 400.0]))
 
         position_string = str(new_player.position[0]) + ',' + str(new_player.position[1])
         msg_to_send += position_string

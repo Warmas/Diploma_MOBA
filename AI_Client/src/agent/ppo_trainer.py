@@ -81,7 +81,7 @@ class PpoTrainer:
             memory.is_r_disc = True
 
             # Normalizing rewards
-            reward_np_list = np.array(memory.reward_list)
+            reward_np_list = np.array(memory.reward_list, dtype=float)
             is_all_zero = np.all((reward_np_list == 0))
             if not is_all_zero:
                 rewards_mean = reward_np_list.mean(axis=0)

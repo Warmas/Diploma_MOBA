@@ -269,10 +269,10 @@ class AiClientMain(ClientMain):
             self.do_transfer()
 
         # TESTING MOBS
-        msg = Message()
-        msg.set_header_by_id(MessageTypes.TransferDone.value)
-        msg.push_bytes(b'1')
-        self.net_client.send_message(msg)
+        # msg = Message()
+        # msg.set_header_by_id(MessageTypes.TransferDone.value)
+        # msg.push_bytes(b'1')
+        # self.net_client.send_message(msg)
 
     def pre_world_update(self, delta_t):
         pass
@@ -319,7 +319,7 @@ class AiClientMain(ClientMain):
             #     is_show_choice = True
 
             if action.disc_action == 0:
-                self.cur_reward -= TEST_REWARD
+                # self.cur_reward -= TEST_REWARD
                 pass
                 # print("---Choosing 0---")
                 # # FOR TESTING SHAPES
@@ -330,9 +330,8 @@ class AiClientMain(ClientMain):
                 # else:
                 #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 1:
-                self.cur_reward -= TEST_REWARD
-                pass # TESTING
-                # self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
+                # self.cur_reward -= TEST_REWARD
+                self.mouse_callback(button=GLUT_RIGHT_BUTTON, state=GLUT_DOWN, mouse_x=mouse_x, mouse_y=mouse_y)
                 # print("---Choosing 1---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -342,8 +341,7 @@ class AiClientMain(ClientMain):
                 # else:
                 #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 2:
-                self.cast_1(mouse_x, mouse_y)
-                print("---Casting fireball")
+                self.cast_1(mouse_x, mouse_y)# 
                 # print("---Choosing 2---")
                 # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -354,7 +352,7 @@ class AiClientMain(ClientMain):
                 #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 3:
                 self.cast_2(mouse_x, mouse_y)
-                self.cur_reward -= TEST_REWARD
+                # self.cur_reward -= TEST_REWARD
                 # print("---Choosing 3---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -362,7 +360,7 @@ class AiClientMain(ClientMain):
                 # self.cur_reward -= (TEST_REWARD * 4)
             elif action.disc_action == 4:
                 self.cast_3(mouse_x, mouse_y)
-                self.cur_reward -= TEST_REWARD
+                # self.cur_reward -= TEST_REWARD
                 # print("---Choosing 4---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -370,7 +368,7 @@ class AiClientMain(ClientMain):
                 # self.cur_reward -= (TEST_REWARD * 4)
             elif action.disc_action == 5:
                 self.cast_4(mouse_x, mouse_y)
-                self.cur_reward -= TEST_REWARD
+                # self.cur_reward -= TEST_REWARD
                 # print("---Choosing 5---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -384,8 +382,8 @@ class AiClientMain(ClientMain):
                 if not self.agent_trainer.memory.push(transition):
                     print("Training memory full!")
                     # TESTING
-                    self.net_client.create_and_send_message(MessageTypes.GameOver.value, b'1')
-                    #self.pause_game()
+                    # self.net_client.create_and_send_message(MessageTypes.GameOver.value, b'1')
+                    self.pause_game()
             # pre_ai = time.time()
             # self.ai_time = aft_ai - pre_ai
             # print("AI time: ", aft_ai - pre_ai)
