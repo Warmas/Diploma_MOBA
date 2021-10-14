@@ -21,7 +21,7 @@ class AiClientMain(ClientMain):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.enemy_player = None
 
-        self.MAX_EPISODE_N = 500
+        self.MAX_EPISODE_N = 2000
         self.CHECKPOINT_EP_N = 50
 
         self.is_training = is_training
@@ -225,9 +225,9 @@ class AiClientMain(ClientMain):
             self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
             if (finished_episode % self.CHECKPOINT_EP_N) == 0:
                 self.agent.save_brain_weights(
-                    "checkpoint_agent_" + str(self.CHECKPOINT_EP_N), self.AGENT_WEIGHT_PATH_ROOT)
+                    "checkpoint_agent_" + str(finished_episode), self.AGENT_WEIGHT_PATH_ROOT)
                 self.agent_trainer.save_optimizer(
-                    "checkpoint_optimizer_" + str(self.CHECKPOINT_EP_N), self.OPTIMIZER_PATH_ROOT)
+                    "checkpoint_optimizer_" + str(finished_episode), self.OPTIMIZER_PATH_ROOT)
             print("Saved models!")
             self.agent_trainer.clear_memory()
             self.net_client.create_and_send_message(MessageTypes.OptimizeDone.value, b'1')
@@ -323,8 +323,7 @@ class AiClientMain(ClientMain):
             #     is_show_choice = True
 
             if action.disc_action == 0:
-                # self.cur_reward -= TEST_REWARD
-                pass
+                self.cur_reward += DO_NOTHING_REWARD
                 # print("---Choosing 0---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -372,7 +371,7 @@ class AiClientMain(ClientMain):
                 # self.cur_reward -= (TEST_REWARD * 4)
             elif action.disc_action == 5:
                 self.cast_4(mouse_x, mouse_y)
-                # self.cur_reward -= TEST_REWARD
+                self.cur_reward += DO_NOTHING_REWARD
                 # print("---Choosing 5---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:

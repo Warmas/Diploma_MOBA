@@ -15,12 +15,6 @@ class Entity:
         self.is_standing = True
         self.col_speed_mod = 1
 
-    def change_position(self, pos, new_front=np.array([0.0, 1.0])):
-        """Changes the position and sets "move_to" to the position so any previous movement command gets discarded."""
-        self.position = pos
-        self.stop()
-        self.front = new_front
-
     def stop(self):
         self.is_standing = True
         self.move_to = self.position
@@ -45,7 +39,7 @@ class Entity:
                 self.position = self.move_to
                 self.stop()
         else:
-            self.is_standing = True
+            self.stop()
         self.is_colliding = False
 
     def lose_health(self, amount_to_lose):
@@ -72,6 +66,12 @@ class Entity:
 
     def set_max_health(self, value):
         self.max_health = value
+
+    def change_position(self, pos, new_front=np.array([0.0, 1.0])):
+        """Changes the position and sets "move_to" to the position so any previous movement command gets discarded."""
+        self.position = pos
+        self.stop()
+        self.front = new_front
 
     def new_front(self, new_point):
         vec = np.subtract(new_point, self.position)

@@ -21,9 +21,8 @@ SCR_HEIGHT = 600
 
 
 if __name__ == '__main__':
-    x = torch.tensor([[1, 2], [3, 4]], dtype=torch.float)
-    print(nn_func.softmax(x, dim=0))
-    print(nn_func.softmax(x, dim=1))
+    asd = 2.41326
+    print("%.2f" % asd)
 
 
 

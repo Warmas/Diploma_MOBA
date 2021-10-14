@@ -19,12 +19,12 @@ class PpoTrainer:
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
         self.CRITIC_DISC_FACTOR = 0.5
-        self.DISC_ENTROPY_FACTOR = 0.001
+        self.DISC_ENTROPY_FACTOR = 0.01
         self.CONT_ENTROPY_FACTOR = 0.001
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2
-        self.MEMORY_CAPACITY = 256  # May be changed depending on RAM.
+        self.MEMORY_CAPACITY = 1024  # May be changed depending on RAM.
         self.BATCH_SIZE = 32  # This increases GPU memory usage, hard to pinpoint good value.
 
         self.device = device
@@ -39,6 +39,7 @@ class PpoTrainer:
             self.memory_list.append(TrainingMemory(self.MEMORY_CAPACITY))
 
         self.cur_episode_n = 1
+        self.optimize_steps_done = 0
         self.is_logging = False
         self.writer = None
         if self.is_logging:
@@ -132,62 +133,64 @@ class PpoTrainer:
             disc_entropy_loss_list.append(disc_entropy_loss)
             cont_entropy_loss_list.append(cont_entropy_loss)
 
+            self.optimize_steps_done += 1
             if self.is_logging:
-                self.writer.add_scalar("Total loss", loss, self.cur_episode_n)
-                self.writer.add_scalar("Actor loss", actor_loss, self.cur_episode_n)
-                self.writer.add_scalar("Critic loss", critic_loss, self.cur_episode_n)
-                self.writer.add_scalar("Discrete action loss", disc_act_loss, self.cur_episode_n)
-                self.writer.add_scalar("Continuous action loss", cont_act_loss, self.cur_episode_n)
-                self.writer.add_scalar("Discrete entropy", disc_entropy_loss, self.cur_episode_n)
-                self.writer.add_scalar("Continuous entopy", cont_entropy_loss, self.cur_episode_n)
-                self.writer.add_scalar("Total reward", total_reward_sum, self.cur_episode_n)
-                self.writer.add_scalar("Reward mean", reward_mean, self.cur_episode_n)
+                self.writer.add_scalar("Total loss", loss, self.optimize_steps_done)
+                self.writer.add_scalar("Actor loss", actor_loss, self.optimize_steps_done)
+                self.writer.add_scalar("Critic loss", critic_loss, self.optimize_steps_done)
+                self.writer.add_scalar("Discrete action loss", disc_act_loss, self.optimize_steps_done)
+                self.writer.add_scalar("Continuous action loss", cont_act_loss, self.optimize_steps_done)
+                self.writer.add_scalar("Discrete entropy", disc_entropy_loss, self.optimize_steps_done)
+                self.writer.add_scalar("Continuous entopy", cont_entropy_loss, self.optimize_steps_done)
 
                 self.writer.add_histogram(
-                    "Conv1 weights", self.actor_critic.brain.conv_block[0].weight, self.cur_episode_n)
+                    "Conv1 weights", self.actor_critic.brain.conv_block[0].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Conv1 bias", self.actor_critic.brain.conv_block[0].bias, self.cur_episode_n)
+                    "Conv1 bias", self.actor_critic.brain.conv_block[0].bias, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Conv2 weights", self.actor_critic.brain.conv_block[2].weight, self.cur_episode_n)
+                    "Conv2 weights", self.actor_critic.brain.conv_block[2].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Conv2 bias", self.actor_critic.brain.conv_block[2].bias, self.cur_episode_n)
+                    "Conv2 bias", self.actor_critic.brain.conv_block[2].bias, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Conv3 weights", self.actor_critic.brain.conv_block[4].weight, self.cur_episode_n)
+                    "Conv3 weights", self.actor_critic.brain.conv_block[4].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Conv3 bias", self.actor_critic.brain.conv_block[4].bias, self.cur_episode_n)
+                    "Conv3 bias", self.actor_critic.brain.conv_block[4].bias, self.optimize_steps_done)
 
                 self.writer.add_histogram(
-                    "Hidden weights", self.actor_critic.brain.hidden_block[0].weight, self.cur_episode_n)
+                    "Hidden weights", self.actor_critic.brain.hidden_block[0].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Hidden bias", self.actor_critic.brain.hidden_block[0].bias, self.cur_episode_n)
+                    "Hidden bias", self.actor_critic.brain.hidden_block[0].bias, self.optimize_steps_done)
 
                 self.writer.add_histogram(
-                    "Disc action weights", self.actor_critic.brain.disc_act_block[0].weight, self.cur_episode_n)
+                    "Disc action weights", self.actor_critic.brain.disc_act_block[0].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Disc action bias", self.actor_critic.brain.disc_act_block[0].bias, self.cur_episode_n)
+                    "Disc action bias", self.actor_critic.brain.disc_act_block[0].bias, self.optimize_steps_done)
 
                 self.writer.add_histogram(
-                    "Cont mean weights", self.actor_critic.brain.cont_means_block[0].weight, self.cur_episode_n)
+                    "Cont mean weights", self.actor_critic.brain.cont_means_block[0].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Cont mean bias", self.actor_critic.brain.cont_means_block[0].bias, self.cur_episode_n)
+                    "Cont mean bias", self.actor_critic.brain.cont_means_block[0].bias, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Cont var weights", self.actor_critic.brain.cont_vars_block[0].weight, self.cur_episode_n)
+                    "Cont var weights", self.actor_critic.brain.cont_vars_block[0].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Cont var bias", self.actor_critic.brain.cont_vars_block[0].bias, self.cur_episode_n)
+                    "Cont var bias", self.actor_critic.brain.cont_vars_block[0].bias, self.optimize_steps_done)
 
                 self.writer.add_histogram(
-                    "Critic weights", self.actor_critic.brain.critic_block[0].weight, self.cur_episode_n)
+                    "Critic weights", self.actor_critic.brain.critic_block[0].weight, self.optimize_steps_done)
                 self.writer.add_histogram(
-                    "Critic bias", self.actor_critic.brain.critic_block[0].bias, self.cur_episode_n)
+                    "Critic bias", self.actor_critic.brain.critic_block[0].bias, self.optimize_steps_done)
 
-                self.writer.flush()
+            # Clean up batch data
+            batch_image_list.clear()
+            batch_disc_act_list.clear()
+            batch_reward_list.clear()
+            batch_act_prob_list.clear()
+            del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
 
-                # Clean up batch data
-                batch_image_list.clear()
-                batch_disc_act_list.clear()
-                batch_reward_list.clear()
-                batch_act_prob_list.clear()
-                del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
+        if self.is_logging:
+            self.writer.add_scalar("Total reward", total_reward_sum, self.cur_episode_n)
+            self.writer.add_scalar("Reward mean", reward_mean, self.cur_episode_n)
+            self.writer.flush()
 
         self.cur_episode_n += 1
         return actor_loss_list, critic_loss_list, combined_loss_list, \

@@ -22,6 +22,8 @@ class ServerMain:
         self.PLAYER_COUNT = 2
         self.MOB_COUNT = 12
         self.OBSTACLE_COUNT = 4
+        self.IS_FPS_ON = False
+        self.FPS_DISPLAY_INTERVAL = 2.0
 
         self.net_server = net.Server(self.process_message, self.connection_lost)
         self.player_dict = {}
@@ -32,11 +34,13 @@ class ServerMain:
         self.aoe_list = []
 
         self.last_frame = 0.0
-        self.mob_aggro_timer = 0
-        self.counter_for_fps = 0
-        self.is_fps_on = True
-        self.is_stop = False
+        self.MOB_AGGRO_CHECK_INTERVAL = 0.2
+        self.mob_aggro_timer = 0.0
+        self.counter_for_fps = 0.0
+        # self.UPDATE_MSG_INTERVAL = 0.01
+        # self.counter_for_update = 0.0
 
+        self.is_stop = False
         self.is_game_over = False
         self.client_ready_counter = 0
 
@@ -46,6 +50,8 @@ class ServerMain:
 
         # For agent training
         self.optimizer_socket = None
+
+        # self.DEBUG_MOVETO_COUNT = 0
 
     def start(self):
         self.net_server.start()
@@ -77,12 +83,18 @@ class ServerMain:
             self.client_authentication(msg.socket, msg.get_body_as_string())
 
         elif msg_id == MessageTypes.PlayerMoveTo.value:
+            # self.DEBUG_MOVETO_COUNT += 1
             player = self.get_player_for_socket(msg.socket)
             x = msg.get_float()
             y = msg.get_float()
             send_time = msg.get_double()
-            player.move_to = np.array([x, y])
-            player.new_front(np.array([x, y]))
+            # print("MOVETO: [" + str(self.DEBUG_MOVETO_COUNT) + "]\n",
+            #       "\tCurrent time: " + "%.2f" % time.time(),
+            #       "\tSend time: " + "%.2f" % send_time,
+            #       "\tCurrent pos: " + str(player.position),
+            #       "\tNew moveto: " + str(np.array([x, y])),
+            #       "\tPast moveto: " + str(player.move_to))
+            player.set_move_to(np.array([x, y]))
             new_msg = Message()
             new_msg.set_header_by_id(MessageTypes.PlayerMoveTo.value)
             new_msg.push_string(player.player_id)
@@ -337,8 +349,8 @@ class ServerMain:
         hp_gain_list = []      # Tuple(player, amount)
 
         self.mob_aggro_timer += delta_t
-        if self.mob_aggro_timer > 0.2:
-            self.mob_aggro_timer = 0
+        if self.mob_aggro_timer > self.MOB_AGGRO_CHECK_INTERVAL:
+            self.mob_aggro_timer = 0.0
             players_hit = self.mob_detect(damage_deal_list)
             player_hp_update_list.extend(players_hit)
 
@@ -543,17 +555,33 @@ class ServerMain:
         return players_hit
 
     def update_world(self, delta_t):
-        if self.is_fps_on:
+        if self.IS_FPS_ON:
             self.counter_for_fps += delta_t
-            if self.counter_for_fps > 2:
-                self.counter_for_fps = 0
-                print("FPS: ", 1 / delta_t)
+            if self.counter_for_fps > self.FPS_DISPLAY_INTERVAL:
+                self.counter_for_fps = 0.0
+                print("FPS: ", "%.0f" % (1.0 / delta_t))
 
         self.detect_collisions(delta_t)
         for player in self.player_dict.values():
             player.on_update(delta_t)
         for mob in self.mob_dict.values():
             mob.on_update(delta_t)
+
+        # This is all glitchy without past-render
+        # self.counter_for_update += delta_t
+        # if self.counter_for_update > self.UPDATE_MSG_INTERVAL:
+        #     self.counter_for_update = 0.0
+        #     for player in self.player_dict.values():
+        #         msg = Message()
+        #         msg.set_header_by_id(MessageTypes.PlayerMoveTo.value)
+        #         msg.push_string(player.player_id)
+        #         msg.push_float(player.move_to[0])
+        #         msg.push_float(player.move_to[1])
+        #         msg.push_float(player.position[0])
+        #         msg.push_float(player.position[1])
+        #         msg.push_double(-1.0)
+        #         self.net_server.message_all(msg)
+
         self.net_server.send_updates()
 
     def end_game(self, loser_id):
@@ -564,6 +592,7 @@ class ServerMain:
         self.net_server.message_all(msg)
 
         print("Resetting map!")
+        # self.DEBUG_MOVETO_COUNT = 0
         self.client_ready_counter = 0
         self.map_reset()
         msg_body = self.create_map_reset_msg()

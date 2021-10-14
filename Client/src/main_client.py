@@ -17,6 +17,9 @@ from Common.src.game_constants import *
 
 class ClientMain:
     def __init__(self, player_id, is_displayed=True):
+        self.IS_FPS_ON = False
+        self.FPS_DISPLAY_INTERVAL = 2.0
+
         self.net_client = net.Client(self.process_message, self.stop)
         self.net_thread = None
 
@@ -28,9 +31,10 @@ class ClientMain:
         self.heal_place_list = []
         self.projectile_dict = {}
         self.aoe_dict = {}
-        self.last_frame = 0
-        self.counter_for_fps = 0
-        self.is_fps_on = True
+
+        self.last_frame = 0.0
+        self.counter_for_fps = 0.0
+
         self.is_auth_comp = False
         self.is_first_player = False
         self.is_start_game = False
@@ -47,6 +51,8 @@ class ClientMain:
                                  self.heal_place_list,
                                  self.projectile_dict,
                                  self.aoe_dict)
+
+        # self.DEBUG_MOVETO_COUNT = 0
 
     def start(self):
         # self.net_thread = threading.Thread(target=self.net_client.start_connection, args=("127.0.0.1", 54321))
@@ -73,8 +79,8 @@ class ClientMain:
     def process_message(self, msg):
         msg_id = msg.get_msg_id()
         if msg_id == MessageTypes.PingServer.value:
-            send_time = struct.unpack("!d", msg.body)[0]
-            print("Server ping: ", (time.time() - send_time), " s")
+            send_time = msg.get_double()
+            print("Server ping: ", "%.1f" % ((time.time() - send_time) * 1000.0), " ms")
 
         elif msg_id == MessageTypes.MessagePrint.value:
             print("Message from server: ", msg.get_body_as_string())
@@ -153,24 +159,32 @@ class ClientMain:
             self.player_dict[enemy.player_id] = enemy
 
         elif msg_id == MessageTypes.PlayerMoveTo.value:
+            # self.DEBUG_MOVETO_COUNT += 1
             player_id = msg.get_string()
             x_mt = msg.get_float()
             y_mt = msg.get_float()
             x_p = msg.get_float()
             y_p = msg.get_float()
+            send_time = msg.get_double()
+            cur_time = time.time()
             player = self.player_dict[player_id]
             new_pos = np.array([x_p, y_p])
             # should_post = False
-            #if g.distance(player.position, new_pos) > 50:
-            #    # should_post = True
-            #    print("Large position jump: ")
-            #    print("\tPast pos: ", player.position)
-            #    print("\tNew pos: ", new_pos)
+
+            # print("MOVETO: [" + str(self.DEBUG_MOVETO_COUNT) + "]\n",
+            #      "\tCurrent time: " + "%.2f" % time.time(),
+            #      "\tSend time: " + "%.2f" % send_time,
+            #      "\tNew pos: " + str(new_pos),
+            #      "\tCurrent pos: " + str(player.position),
+            #      "\tNew moveto: " + str(np.array([x_mt, y_mt])),
+            #      "\tPast moveto: " + str(player.move_to))
+            # if g.distance(player.position, new_pos) > 50:
+                # should_post = True
+                # print("-----Large position jump: ", str(self.DEBUG_MOVETO_COUNT))
+                # print("\tPast pos: ", player.position)
+                # print("\tNew pos: ", new_pos)
             player.position = new_pos  # This causes "jumps" but corrects any error
             player.set_move_to(np.array([x_mt, y_mt]))
-            player.new_front(player.move_to)
-            cur_time = time.time()
-            send_time = msg.get_double()
             # if should_post:
             #     print("Player move delay: ", cur_time - send_time, " s")
             #     print("AI time: ", self.ai_time)
@@ -306,6 +320,7 @@ class ClientMain:
             self.end_game(loser_id)
 
         elif msg_id == MessageTypes.ResetMap.value:
+            # self.DEBUG_MOVETO_COUNT = 0
             self.map_reset_callback(msg)
 
         elif msg_id == MessageTypes.PauseGame.value:
@@ -387,8 +402,7 @@ class ClientMain:
         if key == KeyIds.Key_3.value:
             self.cast_3(mouse_x, mouse_y)
         if key == KeyIds.Key_4.value:
-            pass
-            #self.cast_4(mouse_x, mouse_y)
+            self.cast_4(mouse_x, mouse_y)
         if key == KeyIds.Key_p.value:
             self.ping_server()
         if key == KeyIds.Key_o.value:
@@ -461,23 +475,24 @@ class ClientMain:
             self.net_client.send_message(msg)
 
     def cast_4(self, x, y):
-        cur_time = time.time()
-        if (cur_time - self.user_player.cd_4_start) > SpellCooldowns.Knockback:
-            self.user_player.cd_4_start = cur_time
-            self.user_player.set_move_to(self.user_player.position)
-            self.user_player.is_standing = True
-            new_pos = np.array([float(x), float(y)])
-            self.user_player.front = g.new_front(new_pos, self.user_player.position)
-            # for enemy in self.enemy_list:
-            #    if cone_hit_detection(self.player.position, self.player.front,
-            #                          angle=60, radius=100, point_to_check=enemy.position):
-            #        enemy.position = enemy.position + self.player.front * 100
+        pass
+        #cur_time = time.time()
+        #if (cur_time - self.user_player.cd_4_start) > SpellCooldowns.Knockback:
+        #    self.user_player.cd_4_start = cur_time
+        #    self.user_player.set_move_to(self.user_player.position)
+        #    self.user_player.is_standing = True
+        #    new_pos = np.array([float(x), float(y)])
+        #    self.user_player.front = g.new_front(new_pos, self.user_player.position)
+        #    # for enemy in self.enemy_list:
+        #    #    if cone_hit_detection(self.player.position, self.player.front,
+        #    #                          angle=60, radius=100, point_to_check=enemy.position):
+        #    #        enemy.position = enemy.position + self.player.front * 100
 
-            msg_body = str(SpellTypes.Knockback.value)
-            # msg_body += ';' + str(cur_time)  # no game object no id/cast_time required
-            msg_body += ';' + str(self.user_player.front[0]) + ',' + str(self.user_player.front[1])
-            # Like with projectiles here either this position or the server-side position can be used.
-            self.net_client.create_and_send_message(MessageTypes.CastSpell.value, msg_body, True)
+        #    msg_body = str(SpellTypes.Knockback.value)
+        #    # msg_body += ';' + str(cur_time)  # no game object no id/cast_time required
+        #    msg_body += ';' + str(self.user_player.front[0]) + ',' + str(self.user_player.front[1])
+        #    # Like with projectiles here either this position or the server-side position can be used.
+        #    self.net_client.create_and_send_message(MessageTypes.CastSpell.value, msg_body, True)
 
     def mob_kill(self, killer_id, mob_id):
         self.mob_dict.pop(mob_id)
@@ -485,11 +500,11 @@ class ClientMain:
         self.agent_mob_kill(killer_id, is_lvl_up)
 
     def update_world(self, delta_t):
-        if self.is_fps_on:
+        if self.IS_FPS_ON:
             self.counter_for_fps += delta_t
-            if self.counter_for_fps > 2:
-                self.counter_for_fps = 0
-                #print("FPS: ", 1 / delta_t)
+            if self.counter_for_fps > self.FPS_DISPLAY_INTERVAL:
+                self.counter_for_fps = 0.0
+                print("FPS: ", "%.0f" % (1.0 / delta_t))
 
         for heal_place in self.heal_place_list:
             heal_place.on_update(delta_t)
@@ -552,7 +567,7 @@ class ClientMain:
         # aft_render = time.time()
         # print("Render time: ", aft_render - pre_render)
         if not self.is_paused:
-            if not self.is_game_over:
+            if not self.is_game_over and self.is_start_game:
                 self.post_render(cur_frame)
 
 
