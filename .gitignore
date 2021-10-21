@@ -133,3 +133,7 @@ dmypy.json
 *.pth
 !spec/*.pth
 runs/
+runs_old/
+AI_Client/neural_nets/
+AI_Client/optimizers/
+

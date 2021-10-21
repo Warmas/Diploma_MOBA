@@ -318,8 +318,7 @@ class ServerMain:
             #x_f = float(front_data[0])
             #y_f = float(front_data[1])
             #front = np.array([x_f, y_f])
-            #player.move_to = player.position
-            #player.front = front
+            #player.stop()
             #new_msg_body = str(player.player_id) + ':' + str(SpellTypes.Knockback.value)
             #new_msg_body += ';' + spell_data[1] + ';' + str(player.position[0]) + ',' + str(player.position[1])
             #for p_to_check in self.player_list:

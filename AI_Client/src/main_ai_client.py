@@ -1,5 +1,4 @@
 import time
-import struct
 
 import torch
 import numpy as np
@@ -17,12 +16,13 @@ import io
 
 # Designed for handling 1 or 2 players
 class AiClientMain(ClientMain):
-    def __init__(self, player_id, is_training, is_displayed, is_load_weights, weight_file, optimizer_file):
+    def __init__(self, player_id, is_training, is_displayed, is_continue_training, weight_file, optimizer_file,
+                 tensorboard_dir, last_episode_n):
         super(AiClientMain, self).__init__(player_id, is_displayed)
         self.enemy_player = None
 
-        self.MAX_EPISODE_N = 2000
-        self.CHECKPOINT_EP_N = 50
+        self.MAX_EPISODE_N = 10000
+        self.CHECKPOINT_EP_N = 500
 
         self.is_training = is_training
         self.is_optimizer = False
@@ -30,6 +30,8 @@ class AiClientMain(ClientMain):
         self.agent_trainer = None
         self.AGENT_WEIGHT_PATH_ROOT = "AI_Client/neural_nets/weights/ppo/"
         self.OPTIMIZER_PATH_ROOT = "AI_Client/optimizers/ppo/"
+        self.tensorboard_dir = tensorboard_dir
+        self.is_continue_training = is_continue_training
 
         if torch.cuda.is_available():
             print("Using cuda")
@@ -46,17 +48,18 @@ class AiClientMain(ClientMain):
         else:
             self.agent_trainer = PpoTrainer(self.device, self.agent)
             optimizer_path = ""
-            if is_load_weights:
+            if is_continue_training:
+                self.agent_trainer.cur_episode_n = last_episode_n + 1
                 agent_weight_path = self.AGENT_WEIGHT_PATH_ROOT + weight_file
                 optimizer_path = self.OPTIMIZER_PATH_ROOT + optimizer_file
-            self.agent_trainer.init(is_load_weights, agent_weight_path, optimizer_path)
-            if is_load_weights:
+            self.agent_trainer.init(is_continue_training, agent_weight_path, optimizer_path)
+            if is_continue_training:
                 print("Loaded agent weights from path: ", agent_weight_path)
                 print("Loaded optimizer from path: ", optimizer_path)
 
         self.steps_done = 0
         self.agent_frame_time = 0
-        self.AGENT_FRAME_DELAY = 0.15
+        self.AGENT_FRAME_DELAY = 0.15  # Minimum FPS > 6.67
         self.cur_reward = 0
         # self.ai_time = 0
 
@@ -67,7 +70,7 @@ class AiClientMain(ClientMain):
 
     def select_trainer(self):
         if self.is_training:
-            self.agent_trainer.select_as_trainer()
+            self.agent_trainer.select_as_trainer(self.is_continue_training, self.tensorboard_dir)
 
     def start_game_callback(self):
         for player in self.player_dict.values():
@@ -219,21 +222,22 @@ class AiClientMain(ClientMain):
         # print("Total reward: ", sum(reward_sum_list))
         finished_episode = self.agent_trainer.cur_episode_n - 1
         print("Finished episode: ", finished_episode)
+        print("Optimization steps done: ", self.agent_trainer.optimize_steps_done)
         if finished_episode < self.MAX_EPISODE_N:
             print("Saving models...")
             # We don't really need checkpoints as we have to save each episode anyway
             self.agent.save_brain_weights("temp_agent", self.AGENT_WEIGHT_PATH_ROOT)
             if (finished_episode % self.CHECKPOINT_EP_N) == 0:
-                self.agent.save_brain_weights(
-                    "checkpoint_agent_" + str(finished_episode), self.AGENT_WEIGHT_PATH_ROOT)
-                self.agent_trainer.save_optimizer(
-                    "checkpoint_optimizer_" + str(finished_episode), self.OPTIMIZER_PATH_ROOT)
+                agent_path = self.AGENT_WEIGHT_PATH_ROOT + "checkpoint_agent_" + str(finished_episode)
+                optimizer_path = self.OPTIMIZER_PATH_ROOT + "checkpoint_optimizer_" + str(finished_episode)
+                self.agent_trainer.make_checkpoint(agent_path, optimizer_path)
             print("Saved models!")
             self.agent_trainer.clear_memory()
             self.net_client.create_and_send_message(MessageTypes.OptimizeDone.value, b'1')
         else:
             print("Saving final agent...")
-            self.agent_trainer.shutdown(self.AGENT_WEIGHT_PATH_ROOT + "final_agent")
+            self.agent_trainer.shutdown(
+                self.AGENT_WEIGHT_PATH_ROOT + "final_agent", self.OPTIMIZER_PATH_ROOT + "final_optimizer")
             print("Saved final agent!")
             self.net_client.create_and_send_message(MessageTypes.CloseGame.value, b'1')
 
@@ -396,8 +400,10 @@ class AiClientMain(ClientMain):
 
 
 def start_ai_client(client_id="AI_Ben_pycharm", is_training=False, is_displayed=True,
-                    is_load_weights=True, weight_file="last_agent_weight.pth", optimizer_file=""):
+                    is_load_weights=True, weight_file="last_agent_weight.pth", optimizer_file="",
+                    tensorboard_dir="last_run", episode_n=0):
     if not is_displayed:
         print("Not being displayed")
-    client = AiClientMain(client_id, is_training, is_displayed, is_load_weights, weight_file, optimizer_file)
+    client = AiClientMain(client_id, is_training, is_displayed, is_load_weights, weight_file, optimizer_file,
+                          tensorboard_dir, episode_n)
     client.start()
