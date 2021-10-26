@@ -14,13 +14,13 @@ from AI_Client.src.agent.training_memory import *
 
 class PpoTrainer:
     def __init__(self, device, agent):
-        self.GAMMA = 0.99  # If we can increase it to 0.999, but this is good enough
+        self.GAMMA = 0.99  # Increasing it for more complex strategies that are harder to learn.
         self.TARGET_UPDATE = 10  # UNUSED
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
         self.CRITIC_DISC_FACTOR = 0.5
-        self.DISC_ENTROPY_FACTOR = 0.01
-        self.CONT_ENTROPY_FACTOR = 0.01  # EXPERIMENTAL: they miss a lot so divided by 10
+        self.DISC_ENTROPY_FACTOR = 1e-3  # ORIGINAL: 0.01
+        self.CONT_ENTROPY_FACTOR = 1e-3  # ORIGINAL: 0.01
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2

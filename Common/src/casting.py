@@ -34,7 +34,8 @@ class Projectile:
 
 class Fireball(Projectile):
     def __init__(self, cast_time, owner, position, front):
-        super(Fireball, self).__init__(cast_time, owner, position, front, radius=5, speed=200, damage=8)
+        super(Fireball, self).__init__(cast_time, owner, position, front, radius=7, speed=450, damage=8)
+        # ORIGINAL: radius=5, speed=200
 
 
 class Aoe:
