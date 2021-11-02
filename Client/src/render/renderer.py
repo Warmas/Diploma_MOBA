@@ -392,7 +392,7 @@ class Renderer:
         glColor3f(0.95, 0.9, 0.8)
         self.draw_circle(pos, radius=radius, side_num=10)
         # Drawing the path rectangle
-        self.draw_rectangle(pos - projectile.front * radius, a=radius * 2.0, b=radius * 0.4, front=projectile.front)
+        self.draw_rectangle(pos - projectile.front * radius, a=radius * 1.8, b=radius * 0.4, front=projectile.front)
         if projectile.owner == self.user_player.player_id:
             glColor3f(0.0, 1.0, 0.0)
         else:

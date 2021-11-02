@@ -15,14 +15,16 @@ import argparse
 from PIL import Image
 from OpenGL.GL import *
 from OpenGL.GLUT import *
+from torch.distributions import Categorical, Normal
 
 SCR_WIDTH = 800
 SCR_HEIGHT = 600
 
 
 if __name__ == '__main__':
-    asd = 2.41326
-    print("%.2f" % asd)
+    cont_dist = Normal(1.0, -1.0)
+    cont_action = cont_dist.sample()
+    print(cont_action)
 
 
 

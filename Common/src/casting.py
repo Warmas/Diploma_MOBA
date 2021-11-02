@@ -45,9 +45,9 @@ class Fireball(Projectile):
 class Snowball(Projectile):
     def __init__(self, cast_time, owner, position, front):
         super(Snowball, self).__init__(SkillTypes.Snowball.value, cast_time, owner, position, front,
-                                       radius=12, speed=300, damage=15)
+                                       radius=11, speed=300, damage=15)
         self.max_radius = 36
-        self.growth_rate = 12
+        self.growth_rate = 11
 
     def on_update(self, delta_t):
         if self.radius < self.max_radius:
