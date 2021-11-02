@@ -49,13 +49,14 @@ class PpoAgentCriticNn(nn.Module):
 
         self.cont_means_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, cont_act_n),
-            nn.ReLU6()
-            # nn.Tanh() this is the original but the these translate to pixel values so should be linear
+            #nn.ReLU6()
+            nn.Tanh()  # this is the original but the these translate to pixel values so should be linear
         )
 
         self.cont_vars_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, cont_act_n),
-            nn.ReLU()  # original: nn.Softplus()
+            #nn.ReLU()
+            nn.Softplus()  # original
         )
 
         self.critic_block = nn.Sequential(
@@ -75,11 +76,12 @@ class PpoAgentCriticNn(nn.Module):
         nn.init.xavier_uniform_(self.disc_act_block[0].weight)
         nn.init.constant_(self.disc_act_block[0].bias, 0.0)
 
-        nn.init.kaiming_uniform_(self.cont_means_block[0].weight, nonlinearity="relu")
+        nn.init.xavier_uniform_(self.cont_means_block[0].weight)
+        #nn.init.kaiming_uniform_(self.cont_means_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_means_block[0].bias, 0.0)
 
-        # nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
-        nn.init.kaiming_uniform_(self.cont_vars_block[0].weight, nonlinearity="relu")
+        nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
+        # nn.init.kaiming_uniform_(self.cont_vars_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_vars_block[0].bias, 0.0)
 
         nn.init.xavier_uniform_(self.critic_block[0].weight)
@@ -94,8 +96,8 @@ class PpoAgentCriticNn(nn.Module):
         conv_out = self.conv_block(image_t)
         hidden_out = self.hidden_block(conv_out)
         disc_out = self.disc_act_block(hidden_out)
-        # cont_means_out = ((self.cont_means_block(hidden_out) + 1) / 2)  # Change Tanh() range from [-1;1] to [0;1]
-        cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
+        cont_means_out = ((self.cont_means_block(hidden_out) + 1) / 2)  # Change Tanh() range from [-1;1] to [0;1]
+        #cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
         cont_vars_out = self.cont_vars_block(hidden_out)
         critic_out = self.critic_block(hidden_out)
 
