@@ -1,22 +1,25 @@
 from enum import Enum
 
 
-class SpellTypes(Enum):
+class SkillTypes(Enum):
     Fireball = 1
     BurningGround = 2
     HolyGround = 3
     Knockback = 4
+    Snowball = 5
 
 
-class SpellCooldowns:
+class SkillCooldowns:
     Fireball = 0.5
     BurnGround = 10
     HolyGround = 10
     Knockback = 4
+    Snowball = 5
 
 
 class Projectile:
-    def __init__(self, cast_time, owner, position, front, radius, speed, damage):
+    def __init__(self, skill_type, cast_time, owner, position, front, radius, speed, damage):
+        self.skill_type = skill_type
         self.cast_time = cast_time
         self.owner = owner
         self.position = position
@@ -34,8 +37,23 @@ class Projectile:
 
 class Fireball(Projectile):
     def __init__(self, cast_time, owner, position, front):
-        super(Fireball, self).__init__(cast_time, owner, position, front, radius=7, speed=450, damage=8)
+        super(Fireball, self).__init__(SkillTypes.Fireball.value, cast_time, owner, position, front,
+                                       radius=7, speed=475, damage=8)
         # ORIGINAL: radius=5, speed=200
+
+
+class Snowball(Projectile):
+    def __init__(self, cast_time, owner, position, front):
+        super(Snowball, self).__init__(SkillTypes.Snowball.value, cast_time, owner, position, front,
+                                       radius=12, speed=300, damage=15)
+        self.max_radius = 36
+        self.growth_rate = 12
+
+    def on_update(self, delta_t):
+        if self.radius < self.max_radius:
+            self.radius = self.radius + delta_t * self.growth_rate
+            self.radius = min(self.radius, self.max_radius)
+        self.move(delta_t)
 
 
 class Aoe:

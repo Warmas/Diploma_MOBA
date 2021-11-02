@@ -11,7 +11,7 @@ from Common.src.game_objects.entities.player import Player
 from Common.src.game_objects.entities.mob import Mob
 from Common.src.game_objects.statics.obstacle import *
 from Common.src import casting
-from Common.src.casting import SpellTypes
+from Common.src.casting import SkillTypes
 from Common.src.game_objects.collision.collision_eval import *
 import Common.src.globals as g
 from Common.src.game_constants import *
@@ -20,8 +20,8 @@ from Common.src.game_constants import *
 class ServerMain:
     def __init__(self):
         self.PLAYER_COUNT = 2
-        self.MOB_COUNT = 12
-        self.OBSTACLE_COUNT = 4
+        self.MOB_COUNT = 14
+        self.OBSTACLE_COUNT = 6
         self.IS_FPS_ON = False
         self.FPS_DISPLAY_INTERVAL = 2.0
 
@@ -268,7 +268,7 @@ class ServerMain:
         msg_body = bytearray(msg.get_body())
         spell_id = msg.get_int()
 
-        if spell_id == SpellTypes.Fireball.value:
+        if spell_id == SkillTypes.Fireball.value:
             cast_time = msg.get_double()
             mouse_x = msg.get_float()
             mouse_y = msg.get_float()
@@ -284,7 +284,7 @@ class ServerMain:
             new_msg.push_float(player.position[1])
             self.net_server.message_all(new_msg)
 
-        elif spell_id == SpellTypes.BurningGround.value:
+        elif spell_id == SkillTypes.BurningGround.value:
             cast_time = msg.get_double()
             x_p = msg.get_float()
             y_p = msg.get_float()
@@ -298,7 +298,7 @@ class ServerMain:
             new_msg.push_bytes(msg_body)
             self.net_server.message_all(new_msg)
 
-        elif spell_id == SpellTypes.HolyGround.value:
+        elif spell_id == SkillTypes.HolyGround.value:
             cast_time = msg.get_double()
             x_p = msg.get_float()
             y_p = msg.get_float()
@@ -312,7 +312,7 @@ class ServerMain:
             new_msg.push_bytes(msg_body)
             self.net_server.message_all(new_msg)
 
-        elif spell_id == SpellTypes.Knockback.value:
+        elif spell_id == SkillTypes.Knockback.value:
             pass
             #front_data = spell_data[1].split(',')
             #x_f = float(front_data[0])
@@ -338,6 +338,22 @@ class ServerMain:
             #        new_msg_body += "\n\n" + str(m_to_check.mob_id) + '\n' \
             #                        + str(m_to_check.position[0]) + ',' + str(m_to_check.position[1])
             #self.net_server.message_all(MessageTypes.CastSpell.value, new_msg_body, True)
+
+        elif spell_id == SkillTypes.Snowball.value:
+            cast_time = msg.get_double()
+            mouse_x = msg.get_float()
+            mouse_y = msg.get_float()
+            front = g.new_front(np.array([mouse_x, mouse_y]), player.position)
+            snowball = casting.Snowball(cast_time, player.player_id, player.position, front)
+            snowball.damage = snowball.damage * player.level
+            self.projectile_list.append(snowball)
+            new_msg = Message()
+            new_msg.set_header_by_id(MessageTypes.CastSpell.value)
+            new_msg.push_string(player.player_id)
+            new_msg.push_bytes(msg_body)
+            new_msg.push_float(player.position[0])
+            new_msg.push_float(player.position[1])
+            self.net_server.message_all(new_msg)
 
     def detect_collisions(self, delta_t):
         player_hp_update_list = []

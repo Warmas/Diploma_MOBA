@@ -4,7 +4,7 @@ from Common.src.game_objects.entities import entity
 class Mob(entity.Entity):
     def __init__(self, mob_id):
         self.mob_id = mob_id
-        super(Mob, self).__init__(radius=10, speed=60, max_health=30)
+        super(Mob, self).__init__(radius=12, speed=60, max_health=30)
         self.attack_damage = 5
         self.attack_range = 30
         self.detect_range = 100

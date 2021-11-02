@@ -2,7 +2,7 @@ import numpy as np
 
 
 class CircleObstacle:
-    def __init__(self, position=np.array([0.0, 0.0]), radius=20):
+    def __init__(self, position=np.array([0.0, 0.0]), radius=22):
         self.position = position
         self.radius = radius
 

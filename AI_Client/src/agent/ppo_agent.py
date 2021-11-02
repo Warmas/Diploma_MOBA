@@ -1,11 +1,8 @@
-import random
-import math
 import time
 
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical, Normal
-import torch.nn.functional as nn_func
 
 from AI_Client.src.agent.env_globals import *
 
@@ -57,7 +54,7 @@ class PpoAgentCriticNn(nn.Module):
 
         self.cont_vars_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, cont_act_n),
-            nn.Softplus()  # or Relu()
+            nn.ReLU()  # original: nn.Softplus()
         )
 
         self.critic_block = nn.Sequential(
@@ -80,7 +77,9 @@ class PpoAgentCriticNn(nn.Module):
         nn.init.xavier_uniform_(self.cont_means_block[0].weight)
         nn.init.constant_(self.cont_means_block[0].bias, 0.0)
 
-        nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
+        # nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
+        # nn.init.constant_(self.cont_vars_block[0].bias, 0.0)
+        nn.init.kaiming_uniform_(self.cont_vars_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_vars_block[0].bias, 0.0)
 
         nn.init.xavier_uniform_(self.critic_block[0].weight)

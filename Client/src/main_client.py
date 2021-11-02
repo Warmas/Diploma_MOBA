@@ -206,7 +206,7 @@ class ClientMain:
             player_id = msg.get_string()
             spell_id = msg.get_int()
 
-            if spell_id == SpellTypes.Fireball.value:
+            if spell_id == SkillTypes.Fireball.value:
                 cast_time = msg.get_double()
                 mouse_x = msg.get_float()
                 mouse_y = msg.get_float()
@@ -217,7 +217,7 @@ class ClientMain:
                 fireball = Fireball(cast_time, player_id, cast_pos, front)
                 self.projectile_dict[(cast_time, player_id)] = fireball
 
-            elif spell_id == SpellTypes.BurningGround.value:
+            elif spell_id == SkillTypes.BurningGround.value:
                 cast_time = msg.get_double()
                 x_p = msg.get_float()
                 y_p = msg.get_float()
@@ -225,7 +225,7 @@ class ClientMain:
                 burn_ground = BurnGround(player_id, cast_pos, cast_time)
                 self.aoe_dict[(cast_time, player_id)] = burn_ground
 
-            elif spell_id == SpellTypes.HolyGround.value:
+            elif spell_id == SkillTypes.HolyGround.value:
                 cast_time = msg.get_double()
                 x_p = msg.get_float()
                 y_p = msg.get_float()
@@ -233,7 +233,18 @@ class ClientMain:
                 holy_ground = HolyGround(player_id, cast_pos, cast_time)
                 self.aoe_dict[(cast_time, player_id)] = holy_ground
 
-            elif spell_id == SpellTypes.Knockback.value:
+            elif spell_id == SkillTypes.Snowball.value:
+                cast_time = msg.get_double()
+                mouse_x = msg.get_float()
+                mouse_y = msg.get_float()
+                player_x = msg.get_float()
+                player_y = msg.get_float()
+                cast_pos = np.array([player_x, player_y])
+                front = g.new_front(np.array([mouse_x, mouse_y]), cast_pos)
+                snowball = Snowball(cast_time, player_id, cast_pos, front)
+                self.projectile_dict[(cast_time, player_id)] = snowball
+
+            elif spell_id == SkillTypes.Knockback.value:
                 pass
                 #is_caster = bool(self.player.player_id == player_id)
                 #front_data = spell_data[1].split(',')
@@ -433,14 +444,14 @@ class ClientMain:
 
     def cast_1(self, mouse_x, mouse_y):
         cur_time = time.time()
-        if (cur_time - self.user_player.cd_1_start) > SpellCooldowns.Fireball:
+        if (cur_time - self.user_player.cd_1_start) > SkillCooldowns.Fireball:
             self.user_player.cd_1_start = cur_time
             # We don't care about client delay so unused
             # fireball = Fireball(cur_time, self.player_id, self.player.position, front)
             # self.projectile_list.append(fireball)
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
-            msg.push_int(SpellTypes.Fireball.value)
+            msg.push_int(SkillTypes.Fireball.value)
             msg.push_double(cur_time)
             # We use server player-position
             # front = g.new_front(np.array([float(mouse_x), float(mouse_y)]), self.player.position)
@@ -452,11 +463,11 @@ class ClientMain:
 
     def cast_2(self, mouse_x, mouse_y):
         cur_time = time.time()
-        if (cur_time - self.user_player.cd_2_start) > SpellCooldowns.BurnGround:
+        if (cur_time - self.user_player.cd_2_start) > SkillCooldowns.BurnGround:
             self.user_player.cd_2_start = cur_time
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
-            msg.push_int(SpellTypes.BurningGround.value)
+            msg.push_int(SkillTypes.BurningGround.value)
             msg.push_double(cur_time)
             msg.push_float(float(mouse_x))
             msg.push_float(float(mouse_y))
@@ -464,18 +475,34 @@ class ClientMain:
 
     def cast_3(self, mouse_x, mouse_y):
         cur_time = time.time()
-        if (cur_time - self.user_player.cd_3_start) > SpellCooldowns.HolyGround:
+        if (cur_time - self.user_player.cd_3_start) > SkillCooldowns.HolyGround:
             self.user_player.cd_3_start = cur_time
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
-            msg.push_int(SpellTypes.HolyGround.value)
+            msg.push_int(SkillTypes.HolyGround.value)
             msg.push_double(cur_time)
             msg.push_float(float(mouse_x))
             msg.push_float(float(mouse_y))
             self.net_client.send_message(msg)
 
-    def cast_4(self, x, y):
-        pass
+    def cast_4(self, mouse_x, mouse_y):
+        cur_time = time.time()
+        if (cur_time - self.user_player.cd_4_start) > SkillCooldowns.Snowball:
+            self.user_player.cd_4_start = cur_time
+            # We don't care about client delay so unused
+            # fireball = Fireball(cur_time, self.player_id, self.player.position, front)
+            # self.projectile_list.append(fireball)
+            msg = Message()
+            msg.set_header_by_id(MessageTypes.CastSpell.value)
+            msg.push_int(SkillTypes.Snowball.value)
+            msg.push_double(cur_time)
+            # We use server player-position
+            # front = g.new_front(np.array([float(mouse_x), float(mouse_y)]), self.player.position)
+            # msg.push_float(self.player.position[0])
+            # msg.push_float(self.player.position[1])
+            msg.push_float(float(mouse_x))
+            msg.push_float(float(mouse_y))
+            self.net_client.send_message(msg)
         #cur_time = time.time()
         #if (cur_time - self.user_player.cd_4_start) > SpellCooldowns.Knockback:
         #    self.user_player.cd_4_start = cur_time

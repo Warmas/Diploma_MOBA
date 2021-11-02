@@ -2,6 +2,7 @@ import time
 
 import torch
 import numpy as np
+import io
 
 from Client.src.main_client import ClientMain, MessageTypes, Message
 from Common.src.game_constants import *
@@ -11,7 +12,6 @@ from AI_Client.src.agent.env_globals import *
 from AI_Client.src.agent.reward_constants import *
 from OpenGL.GLUT import *
 from PIL import Image
-import io
 
 
 # Designed for handling 1 or 2 players
@@ -348,7 +348,7 @@ class AiClientMain(ClientMain):
                 # else:
                 #     self.cur_reward -= TEST_REWARD
             elif action.disc_action == 2:
-                self.cast_1(mouse_x, mouse_y)#
+                self.cast_1(mouse_x, mouse_y)
                 # print("---Choosing 2---")
                 # FOR TESTING SHAPES
                 # if is_show_choice:
@@ -375,7 +375,6 @@ class AiClientMain(ClientMain):
                 # self.cur_reward -= (TEST_REWARD * 4)
             elif action.disc_action == 5:
                 self.cast_4(mouse_x, mouse_y)
-                self.cur_reward += DO_NOTHING_REWARD
                 # print("---Choosing 5---")
                 # # FOR TESTING SHAPES
                 # if is_show_choice:

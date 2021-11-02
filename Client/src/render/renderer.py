@@ -8,6 +8,7 @@ import OpenGL.GL.shaders
 import glm
 
 from Client.src.render.shader import Shader
+from Common.src.casting import SkillTypes
 
 
 class KeyIds(Enum):
@@ -192,7 +193,10 @@ class Renderer:
             if not enemy.player_id == self.user_player.player_id:
                 self.draw_enemy_player(enemy)
         for projectile in self.projectile_list.values():
-            self.draw_fireball(projectile)
+            if projectile.skill_type == SkillTypes.Fireball.value:
+                self.draw_fireball(projectile)
+            elif projectile.skill_type == SkillTypes.Snowball.value:
+                self.draw_snowball(projectile)
 
         # # FOR TESTING SHAPES
         # if self.test_num == 0:
@@ -247,7 +251,7 @@ class Renderer:
         if enemy.level >= 3:
             glColor3f(0.375, 0.0625, 0.04)
             self.draw_circle_line(pos, radius - 6, side_num=8)
-        self.draw_hp_bar_enemy(enemy)
+        self.draw_hp_bar_hostile(enemy)
 
     def draw_direction_marker(self, player):
         if not player.is_standing:
@@ -280,7 +284,7 @@ class Renderer:
         # glDrawArrays(GL_POLYGON, 0, self.mob_vertex_n)
         # glUseProgram(0)
 
-        self.draw_hp_bar_enemy(mob)
+        self.draw_hp_bar_hostile(mob)
 
     # Instanced rendering
     # def draw_mobs(self):
@@ -318,7 +322,7 @@ class Renderer:
     #         # self.draw_hp_bar_frame(mob.position)
 
     def draw_hp_bar(self):
-        pos = self.user_player.position + np.array([0, -HP_BAR_ELEVATION])
+        pos = self.user_player.position + np.array([0, -HP_BAR_ELEVATION - self.user_player.radius])
         percentage = self.user_player.health / self.user_player.max_health
         glColor3f(0.0, 1.0, 0.0)
         self.draw_rectangle_part(pos, ver_len=HP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH, percentage=percentage)
@@ -326,17 +330,17 @@ class Renderer:
         exp_pos = pos + np.array([0, XP_BAR_DISPLACEMENT])
         glColor3f(0.0, 1.0, 0.0)
         self.draw_rectangle_part(exp_pos, ver_len=XP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH, percentage=exp_perc)
-        self.draw_hp_bar_frame(self.user_player.position)
+        self.draw_hp_bar_frame(self.user_player.position, self.user_player.radius)
 
-    def draw_hp_bar_enemy(self, enemy):
-        pos = enemy.position + np.array([0, -HP_BAR_ELEVATION])
+    def draw_hp_bar_hostile(self, enemy):
+        pos = enemy.position + np.array([0, -HP_BAR_ELEVATION - enemy.radius])
         percentage = enemy.health / enemy.max_health
         glColor3f(1.0, 0.0, 0.0)
         self.draw_rectangle_part(pos, ver_len=HP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH, percentage=percentage)
-        self.draw_hp_bar_frame(enemy.position)
+        self.draw_hp_bar_frame(enemy.position, enemy.radius)
 
-    def draw_hp_bar_frame(self, pos):
-        pos = pos + np.array([0, -HP_BAR_ELEVATION])
+    def draw_hp_bar_frame(self, pos, radius):
+        pos = pos + np.array([0, -HP_BAR_ELEVATION - radius])
         glColor3f(0.0, 0.0, 1.0)
         self.draw_rectangle_line(pos, ver_len=HP_BAR_HEIGHT, hor_len=HP_BAR_WIDTH)
 
@@ -356,8 +360,8 @@ class Renderer:
         self.draw_rectangle_line(pos, ver_len/2, hor_len/2)
         if heal_place.available:
             glColor3f(0.0, 1.0, 0.0)
-            self.draw_rectangle(pos, ver_len=(ver_len / 2)-5, hor_len=3)
-            self.draw_rectangle(pos, ver_len=3, hor_len=(ver_len / 2)-5)
+            self.draw_rectangle(pos, a=ver_len - 10, b=6)
+            self.draw_rectangle(pos, a=6, b=ver_len - 10)
 
     def draw_fireball(self, projectile):
         pos = projectile.position
@@ -376,6 +380,19 @@ class Renderer:
         glVertex2f(point2_x, SCR_HEIGHT - point2_y)
         glVertex2f(point3_x, SCR_HEIGHT - point3_y)
         glEnd()
+        if projectile.owner == self.user_player.player_id:
+            glColor3f(0.0, 1.0, 0.0)
+        else:
+            glColor3f(1.0, 0.0, 0.0)
+        self.draw_circle_line(pos, radius=radius, side_num=10)
+
+    def draw_snowball(self, projectile):
+        pos = projectile.position
+        radius = projectile.radius
+        glColor3f(0.95, 0.9, 0.8)
+        self.draw_circle(pos, radius=radius, side_num=10)
+        # Drawing the path rectangle
+        self.draw_rectangle(pos - projectile.front * radius, a=radius * 2.0, b=radius * 0.4, front=projectile.front)
         if projectile.owner == self.user_player.player_id:
             glColor3f(0.0, 1.0, 0.0)
         else:
@@ -410,14 +427,21 @@ class Renderer:
             glVertex2f(np.cos(angle) * radius + position[0], np.sin(angle) * radius + (SCR_HEIGHT - position[1]))
         glEnd()
 
-    def draw_rectangle(self, pos, ver_len, hor_len):
+    def draw_rectangle(self, pos, a, b, front=np.array([1.0, 0.0])):
         glBegin(GL_QUADS)
-        x = pos[0]
-        y = SCR_HEIGHT - pos[1]
-        glVertex2f(x - hor_len, y - ver_len)
-        glVertex2f(x + hor_len, y - ver_len)
-        glVertex2f(x + hor_len, y + ver_len)
-        glVertex2f(x - hor_len, y + ver_len)
+        a_2 = a / 2
+        b_2 = b / 2
+        cos_phi = front[0]
+        sin_phi = -front[1]
+        rot_m = np.array([[cos_phi, -sin_phi], [sin_phi, cos_phi]])
+        p_1 = pos + np.matmul(np.array([-a_2, -b_2]), rot_m)
+        p_2 = pos + np.matmul(np.array([a_2, -b_2]), rot_m)
+        p_3 = pos + np.matmul(np.array([a_2, b_2]), rot_m)
+        p_4 = pos + np.matmul(np.array([-a_2, b_2]), rot_m)
+        glVertex2f(p_1[0], SCR_HEIGHT - p_1[1])
+        glVertex2f(p_2[0], SCR_HEIGHT - p_2[1])
+        glVertex2f(p_3[0], SCR_HEIGHT - p_3[1])
+        glVertex2f(p_4[0], SCR_HEIGHT - p_4[1])
         glEnd()
 
     def draw_rectangle_line(self, pos, ver_len, hor_len):
