@@ -75,7 +75,6 @@ class PpoAgentCriticNn(nn.Module):
         nn.init.xavier_uniform_(self.disc_act_block[0].weight)
         nn.init.constant_(self.disc_act_block[0].bias, 0.0)
 
-        # nn.init.xavier_uniform_(self.cont_means_block[0].weight)
         nn.init.kaiming_uniform_(self.cont_means_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_means_block[0].bias, 0.0)
 
@@ -160,8 +159,9 @@ class PpoActorCritic:
 
             cont_dist = Normal(cont_means, cont_vars)
             cont_action = cont_dist.sample()
-            cont_action = torch.clamp(cont_action, min=0.0001, max=1)
-            # Can't be 0 as it would be division by 0 later on!
+            cont_action = torch.clamp(cont_action, min=0, max=1)
+            # cont_action = torch.clamp(cont_action, min=0.0001, max=1)
+            # Can't be 0 as it would be division by 0 later on! Doesn't need it with entropy though.
 
             # Transform continuous values to pixel values
             mouse_x_prob = cont_action[0][0].item()
