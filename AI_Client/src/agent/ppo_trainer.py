@@ -24,7 +24,7 @@ class PpoTrainer:
         self.GRAD_NORM = 0.5
 
         self.AGENT_N = 2
-        self.MEMORY_CAPACITY = 64  # May be changed depending on RAM.
+        self.MEMORY_CAPACITY = 1024  # May be changed depending on RAM.
         self.BATCH_SIZE = 32  # This increases GPU memory usage, hard to pinpoint good value.
 
         self.device = device
