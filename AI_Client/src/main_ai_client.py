@@ -62,6 +62,8 @@ class AiClientMain(ClientMain):
         self.AGENT_FRAME_DELAY = 0.15  # Minimum FPS > 6.67
         self.cur_reward = 0
         # self.ai_time = 0
+        self.time_alive = 0.0
+        self.mobs_killed = 0
 
         # TESTING
         self.test_counter = 0
@@ -78,6 +80,9 @@ class AiClientMain(ClientMain):
                 self.enemy_player = player
         if self.is_first_player:
             self.is_optimizer = True
+        self.agent_trainer.is_game_over = False
+        self.time_alive = 0.0
+        self.mobs_killed = 0
 
     def process_agent_message(self, msg_id, msg):
         if msg_id == MessageTypes.TransitionData.value:
@@ -117,6 +122,7 @@ class AiClientMain(ClientMain):
             self.cur_reward += MOB_KILL_REWARD
             if is_lvl_up:
                 self.cur_reward += LVL_UP_REWARD
+            self.mobs_killed += 1
 
     def player_moveto_callback(self, player_id):
         if player_id == self.user_player.player_id:
@@ -148,6 +154,8 @@ class AiClientMain(ClientMain):
             msg.push_float(transition.act_prob.disc_act_prob)
             msg.push_float(transition.act_prob.mouse_x_prob)
             msg.push_float(transition.act_prob.mouse_y_prob)
+            for cd in transition.state[1]:
+                msg.push_float(cd)
             image_bytes = transition.state[0].tobytes()
             image_bytes = Image.frombytes('RGB', (AGENT_SCR_WIDTH, AGENT_SCR_HEIGHT), image_bytes)
 
@@ -187,6 +195,10 @@ class AiClientMain(ClientMain):
         disc_act_prob = msg.get_float()
         mouse_x_prob = msg.get_float()
         mouse_y_prob = msg.get_float()
+        cd_list = []
+        for i in range(AGENT_NUM_INPUT_N):
+            cd_list.append(msg.get_float())
+
         image_byte_size = msg.get_int()
         image_bytes = msg.get_bytes(image_byte_size)
 
@@ -199,7 +211,7 @@ class AiClientMain(ClientMain):
         # image = np.frombuffer(msg.get_bytes(image_byte_size), dtype=np.uint8)
 
         act_prob = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)
-        tran = Transition(State(image), disc_act, reward, act_prob)
+        tran = Transition(State(image, cd_list), disc_act, reward, act_prob)
         # If there were more agents each agent's message would include it's number but we only have one.
         self.agent_trainer.memory_list[1].push(tran)
         if tran_n % 20 == 0:
@@ -250,6 +262,10 @@ class AiClientMain(ClientMain):
         self.net_client.create_and_send_message(MessageTypes.UnpauseGame.value, b'1')
 
     def end_game(self, loser_id=""):
+        self.is_game_over = True
+        self.agent_trainer.is_game_over = True
+        self.agent_trainer.time_alive = self.time_alive
+        self.agent_trainer.mobs_killed = self.mobs_killed
         if loser_id == self.user_player.player_id:
             print("You lost!")
             if self.is_training:
@@ -264,6 +280,7 @@ class AiClientMain(ClientMain):
                     self.agent_trainer.memory.reward_list[-1] += WIN_REWARD
                 else:
                     self.agent_trainer.memory.reward_list.append(WIN_REWARD)
+
         if self.is_training:
             self.pause_game()
 
@@ -283,7 +300,7 @@ class AiClientMain(ClientMain):
         # self.net_client.send_message(msg)
 
     def pre_world_update(self, delta_t):
-        pass
+        self.time_alive += delta_t
         # # FOR TESTING SHAPES
         # self.test_counter += delta_t
         # if self.test_counter > 5:
@@ -307,15 +324,21 @@ class AiClientMain(ClientMain):
             image = Image.fromarray(image)
             image = image.resize((AGENT_SCR_WIDTH, AGENT_SCR_HEIGHT))
             image = np.array(image)
-
             # Rearrange dimensions because the convolutional layer requires color channel matrices not RGB matrix
             image = np.transpose(image, (2, 0, 1))
             image_flatten = image.flatten()
-            state = State(image_flatten)
+
+            cd_list = self.user_player.get_cooldowns()
+            for i in range(len(cd_list)):
+                if cd_list[i] > 0.0:
+                    cd_list[i] = 1.0
+
+            state = State(image_flatten, cd_list)
 
             image_t = torch.from_numpy(np.asarray(image_flatten)).to(self.device)
-            action, act_prob = self.agent.select_action(image_t.unsqueeze(0))
-            del image_t
+            cd_t = torch.tensor(cd_list).to(self.device)
+            action, act_prob = self.agent.select_action(image_t.unsqueeze(0), cd_t.unsqueeze(0))
+            del image_t, cd_t
 
             mouse_x = action.mouse_x
             mouse_y = action.mouse_y

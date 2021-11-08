@@ -443,9 +443,8 @@ class ClientMain:
             self.net_client.send_message(msg)
 
     def cast_1(self, mouse_x, mouse_y):
-        cur_time = time.time()
-        if (cur_time - self.user_player.cd_1_start) > SkillCooldowns.Fireball:
-            self.user_player.cd_1_start = cur_time
+        if self.user_player.cast_fireball():
+            cur_time = time.time()
             # We don't care about client delay so unused
             # fireball = Fireball(cur_time, self.player_id, self.player.position, front)
             # self.projectile_list.append(fireball)
@@ -462,9 +461,8 @@ class ClientMain:
             self.net_client.send_message(msg)
 
     def cast_2(self, mouse_x, mouse_y):
-        cur_time = time.time()
-        if (cur_time - self.user_player.cd_2_start) > SkillCooldowns.BurnGround:
-            self.user_player.cd_2_start = cur_time
+        if self.user_player.cast_burn_ground():
+            cur_time = time.time()
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
             msg.push_int(SkillTypes.BurningGround.value)
@@ -474,9 +472,8 @@ class ClientMain:
             self.net_client.send_message(msg)
 
     def cast_3(self, mouse_x, mouse_y):
-        cur_time = time.time()
-        if (cur_time - self.user_player.cd_3_start) > SkillCooldowns.HolyGround:
-            self.user_player.cd_3_start = cur_time
+        if self.user_player.cast_holy_ground():
+            cur_time = time.time()
             msg = Message()
             msg.set_header_by_id(MessageTypes.CastSpell.value)
             msg.push_int(SkillTypes.HolyGround.value)
@@ -486,9 +483,8 @@ class ClientMain:
             self.net_client.send_message(msg)
 
     def cast_4(self, mouse_x, mouse_y):
-        cur_time = time.time()
-        if (cur_time - self.user_player.cd_4_start) > SkillCooldowns.Snowball:
-            self.user_player.cd_4_start = cur_time
+        if self.user_player.cast_snowball():
+            cur_time = time.time()
             # We don't care about client delay so unused
             # fireball = Fireball(cur_time, self.player_id, self.player.position, front)
             # self.projectile_list.append(fireball)

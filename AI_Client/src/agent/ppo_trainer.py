@@ -45,6 +45,10 @@ class PpoTrainer:
         if self.is_logging:
             self.writer = SummaryWriter()
 
+        self.is_game_over = False
+        self.time_alive = 0.0
+        self.mobs_killed = 0
+
     def select_as_trainer(self, is_continue_training=False, tensorboard_dir=""):
         self.is_logging = True
         if not is_continue_training:
@@ -116,23 +120,27 @@ class PpoTrainer:
         cont_entropy_loss_list = []
 
         batch_image_list = []
+        batch_cd_list = []
         batch_disc_act_list = []
         batch_reward_list = []
         batch_act_prob_list = []
         for batch_indexes in BatchSampler(SubsetRandomSampler(range(len(all_memory))), self.BATCH_SIZE, False):
             for index in batch_indexes:
                 batch_image_list.append(all_memory.state_list[index].image)
+                batch_cd_list.append(all_memory.state_list[index].cooldowns)
                 batch_disc_act_list.append(all_memory.disc_act_list[index])
                 batch_reward_list.append(all_memory.reward_list[index])
                 batch_act_prob_list.append(all_memory.act_prob_list[index])
             # This process has many ways to be done and this one is possibly not the fastest but good enough.
             batch_images_t = torch.tensor(batch_image_list).to(self.device).detach()
+            batch_cd_t = torch.tensor(batch_cd_list).to(self.device).detach()
             batch_disc_acts_t = torch.tensor(batch_disc_act_list, dtype=torch.int64).to(self.device).detach()
             batch_rewards_t = torch.tensor(batch_reward_list).to(self.device).detach()
             batch_act_probs_t = torch.tensor(batch_act_prob_list).to(self.device).detach()
 
             actor_loss, critic_loss, loss, disc_act_loss, cont_act_loss, disc_entropy_loss, cont_entropy_loss = \
                 self.optimization_step(batch_images_t,
+                                       batch_cd_t,
                                        batch_disc_acts_t,
                                        batch_rewards_t,
                                        batch_act_probs_t)
@@ -148,72 +156,77 @@ class PpoTrainer:
 
             # Clean up batch data
             batch_image_list.clear()
+            batch_cd_list.clear()
             batch_disc_act_list.clear()
             batch_reward_list.clear()
             batch_act_prob_list.clear()
             del batch_images_t, batch_disc_acts_t, batch_rewards_t, batch_act_probs_t
 
         if self.is_logging:
-            if self.is_logging:
-                # Tensorboard has 1 global step so we cannot have different steps for episodes and optimizer steps.
-                self.writer.add_scalar("Total loss", combined_loss_list[-1], self.cur_episode_n)
-                self.writer.add_scalar("Actor loss", actor_loss_list[-1], self.cur_episode_n)
-                self.writer.add_scalar("Critic loss", critic_loss_list[-1], self.cur_episode_n)
-                self.writer.add_scalar("Discrete action loss", disc_act_loss_list[-1], self.cur_episode_n)
-                self.writer.add_scalar("Continuous action loss", cont_act_loss_list[-1], self.cur_episode_n)
-                self.writer.add_scalar("Discrete entropy", disc_entropy_loss_list[-1], self.cur_episode_n)
-                self.writer.add_scalar("Continuous entopy", cont_entropy_loss_list[-1], self.cur_episode_n)
+            # Tensorboard has 1 global step so we cannot have different steps for episodes and optimizer steps.
+            self.writer.add_scalar("Total loss", combined_loss_list[-1], self.cur_episode_n)
+            self.writer.add_scalar("Actor loss", actor_loss_list[-1], self.cur_episode_n)
+            self.writer.add_scalar("Critic loss", critic_loss_list[-1], self.cur_episode_n)
+            self.writer.add_scalar("Discrete action loss", disc_act_loss_list[-1], self.cur_episode_n)
+            self.writer.add_scalar("Continuous action loss", cont_act_loss_list[-1], self.cur_episode_n)
+            self.writer.add_scalar("Discrete entropy", disc_entropy_loss_list[-1], self.cur_episode_n)
+            self.writer.add_scalar("Continuous entopy", cont_entropy_loss_list[-1], self.cur_episode_n)
 
-                self.writer.add_histogram(
-                    "Conv1 weights", self.agent.brain.conv_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Conv1 bias", self.agent.brain.conv_block[0].bias, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Conv2 weights", self.agent.brain.conv_block[2].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Conv2 bias", self.agent.brain.conv_block[2].bias, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Conv3 weights", self.agent.brain.conv_block[4].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Conv3 bias", self.agent.brain.conv_block[4].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Conv1 weights", self.agent.brain.conv_block[0].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Conv1 bias", self.agent.brain.conv_block[0].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Conv2 weights", self.agent.brain.conv_block[2].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Conv2 bias", self.agent.brain.conv_block[2].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Conv3 weights", self.agent.brain.conv_block[4].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Conv3 bias", self.agent.brain.conv_block[4].bias, self.cur_episode_n)
 
-                self.writer.add_histogram(
-                    "Hidden weights", self.agent.brain.hidden_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Hidden bias", self.agent.brain.hidden_block[0].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Hidden weights", self.agent.brain.hidden_block[0].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Hidden bias", self.agent.brain.hidden_block[0].bias, self.cur_episode_n)
 
-                self.writer.add_histogram(
-                    "Disc action weights", self.agent.brain.disc_act_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Disc action bias", self.agent.brain.disc_act_block[0].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Disc action weights", self.agent.brain.disc_act_block[0].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Disc action bias", self.agent.brain.disc_act_block[0].bias, self.cur_episode_n)
 
-                self.writer.add_histogram(
-                    "Cont mean weights", self.agent.brain.cont_means_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Cont mean bias", self.agent.brain.cont_means_block[0].bias, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Cont var weights", self.agent.brain.cont_vars_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                    "Cont var bias", self.agent.brain.cont_vars_block[0].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Cont mean weights", self.agent.brain.cont_means_block[0].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Cont mean bias", self.agent.brain.cont_means_block[0].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Cont var weights", self.agent.brain.cont_vars_block[0].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Cont var bias", self.agent.brain.cont_vars_block[0].bias, self.cur_episode_n)
 
-                self.writer.add_histogram(
-                    "Critic weights", self.agent.brain.critic_block[0].weight, self.cur_episode_n)
-                self.writer.add_histogram(
-                        "Critic bias", self.agent.brain.critic_block[0].bias, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Critic weights", self.agent.brain.critic_block[0].weight, self.cur_episode_n)
+            self.writer.add_histogram(
+                "Critic bias", self.agent.brain.critic_block[0].bias, self.cur_episode_n)
 
-            self.writer.add_scalar("Total reward", total_reward_sum, self.cur_episode_n)
-            self.writer.add_scalar("Reward mean", reward_mean, self.cur_episode_n)
+            if self.is_game_over:
+                # Only log these when a game actually ends, don't do it when we run out of memory
+                self.writer.add_scalar("Total reward", total_reward_sum, self.cur_episode_n)
+                self.writer.add_scalar("Reward mean", reward_mean, self.cur_episode_n)
+
+                self.writer.add_scalar("Time alive", self.time_alive, self.cur_episode_n)
+                self.writer.add_scalar("Mobs killed", self.mobs_killed, self.cur_episode_n)
 
         self.cur_episode_n += 1
         return actor_loss_list, critic_loss_list, combined_loss_list, \
             disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list
 
-    def optimization_step(self, image_t, disc_action, r_disc, old_act_prob):
-        disc_policy, cont_means, cont_vars, v_predicted = self.agent.brain(image_t)
+    def optimization_step(self, image_t, cd_t, disc_action, r_disc, old_act_prob):
+        disc_policy, cont_means, cont_vars, v_predicted = self.agent.brain(image_t, cd_t)
         r_disc = r_disc.unsqueeze(1)
 
         actor_loss, disc_act_loss, cont_act_loss, disc_entropy_loss, cont_entropy_loss = \
-            self.calc_actor_loss(r_disc, v_predicted, image_t, disc_action, old_act_prob)
+            self.calc_actor_loss(r_disc, v_predicted, image_t, cd_t, disc_action, old_act_prob)
         critic_loss = self.calc_critic_loss(r_disc, v_predicted)
         loss = actor_loss + self.CRITIC_DISC_FACTOR * critic_loss
 
@@ -252,14 +265,14 @@ class PpoTrainer:
         return actor_loss_to_disp, critic_loss_to_disp, loss_to_disp, \
             disc_act_loss_to_disp, cont_act_loss_to_disp, disc_entropy_loss_to_disp, cont_entropy_loss_to_disp
 
-    def calc_actor_loss(self, r_disc, v_predicted, image_t, disc_action, old_action_prob):
+    def calc_actor_loss(self, r_disc, v_predicted, image_t, cd_t, disc_action, old_action_prob):
         advantage = r_disc - v_predicted
         advantage = advantage.detach()
         # For CriticForActions.
         # If we would use the agent's action's q_value but it would be pointless if discounted reward is available.
         # advantage = self.critic.brain(self.agent.brain(state)) - self.critic.get_best_action_value(state)
         disc_act_prob, cont_means, cont_vars, disc_act_entropy, cont_act_entropy = \
-            self.agent.get_act_prob(image_t, disc_action)
+            self.agent.get_act_prob(image_t, cd_t, disc_action)
 
         old_disc_prob = old_action_prob.index_select(dim=1, index=torch.tensor([0]).to(self.device))
         old_cont_prob = old_action_prob.index_select(dim=1, index=torch.tensor([1, 2]).to(self.device))

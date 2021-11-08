@@ -20,8 +20,8 @@ class PpoAgentCriticNn(nn.Module):
         conv_w = conv2d_size_out(conv2d_size_out(conv2d_size_out(width)))
         conv_h = conv2d_size_out(conv2d_size_out(conv2d_size_out(height)))
         conv_out_size = conv_w * conv_h * 32
-        # If we would like to give extra inputs like spell cooldowns use this:
-        # linear_input_size = conv_out_size + input_dim
+        linear_in_size = conv_out_size  # This ws without cooldowns
+        linear_in_size = conv_out_size + AGENT_NUM_INPUT_N
 
         self.conv_block = nn.Sequential(
             self.conv1,
@@ -37,7 +37,7 @@ class PpoAgentCriticNn(nn.Module):
         )
 
         self.hidden_block = nn.Sequential(
-            nn.Linear(conv_out_size, self.hidden_out_size),
+            nn.Linear(linear_in_size, self.hidden_out_size),
             nn.ReLU()
         )
 
@@ -87,14 +87,16 @@ class PpoAgentCriticNn(nn.Module):
         nn.init.xavier_uniform_(self.critic_block[0].weight)
         nn.init.constant_(self.critic_block[0].bias, 0.0)
 
-    def forward(self, image_t):
+    def forward(self, image_t, cd_t):
         """Requires image as a flattened image tensor."""
         batch_size = image_t.shape[0]
         image_t = image_t.reshape((batch_size, 3, AGENT_SCR_HEIGHT, AGENT_SCR_WIDTH))
         image_t = image_t / 255
 
         conv_out = self.conv_block(image_t)
-        hidden_out = self.hidden_block(conv_out)
+        hidden_in = torch.cat((conv_out, cd_t), dim=1)
+        hidden_out = self.hidden_block(hidden_in)
+        #hidden_out = self.hidden_block(conv_out)  # This is without cd input
         disc_out = self.disc_act_block(hidden_out)
         cont_means_out = ((self.cont_means_block(hidden_out) + 1) / 2)  # Change Tanh() range from [-1;1] to [0;1]
         #cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
@@ -149,11 +151,11 @@ class PpoActorCritic:
         else:
             self.brain.train()
 
-    def select_action(self, image_t):
+    def select_action(self, image_t, cd_t):
         """Requires image as a tensor. Returns namedtuple-s, the first one is the Action, the second one is the
         probabilities of the action."""
         with torch.no_grad():
-            disc_policy, cont_means, cont_vars, critic_value = self.brain(image_t)
+            disc_policy, cont_means, cont_vars, critic_value = self.brain(image_t, cd_t)
 
             disc_dist = Categorical(disc_policy)
             disc_action = disc_dist.sample().item()
@@ -176,8 +178,8 @@ class PpoActorCritic:
             # prob_out = torch.stack((disc_act_prob, mouse_x_prob, mouse_y_prob), dim=0)
             return action, prob_out
 
-    def get_act_prob(self, image_t, disc_action):
-        disc_policy, cont_means, cont_vars, critic_value = self.brain(image_t)
+    def get_act_prob(self, image_t, cd_t, disc_action):
+        disc_policy, cont_means, cont_vars, critic_value = self.brain(image_t, cd_t)
         disc_dist = Categorical(disc_policy)
         cont_dist = Normal(cont_means, cont_vars)
         # Get the probability of the action that was chosen previously

@@ -16,15 +16,20 @@ from PIL import Image
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from torch.distributions import Categorical, Normal
+from collections import namedtuple
+from Client.src.render.render_constants import *
 
 SCR_WIDTH = 800
 SCR_HEIGHT = 600
 
+State = namedtuple("State", ("image", "cooldowns"))
+Action = namedtuple("Action", ("disc_action", "mouse_x", "mouse_y"))
+
 
 if __name__ == '__main__':
-    cont_dist = Normal(1.0, -1.0)
-    cont_action = cont_dist.sample()
-    print(cont_action)
-
+    mytuple = [1, 2, 3]
+    for tup in range(len(mytuple)):
+        mytuple[tup] = 1
+    print(mytuple)
 
 

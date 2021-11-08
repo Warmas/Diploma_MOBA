@@ -1,7 +1,7 @@
 from collections import namedtuple
 from Client.src.render.render_constants import *
 
-State = namedtuple("State", "image")
+State = namedtuple("State", ("image", "cooldowns"))
 Action = namedtuple("Action", ("disc_action", "mouse_x", "mouse_y"))
 ActionProb = namedtuple("ActionProb", ("disc_act_prob", "mouse_x_prob", "mouse_y_prob"))
 
@@ -18,3 +18,5 @@ DISC_ACTION_N = 6
 CONT_ACTION_N = 2
 AGENT_SCR_WIDTH = int(SCR_WIDTH / 4)
 AGENT_SCR_HEIGHT = int(SCR_HEIGHT / 4)
+
+AGENT_NUM_INPUT_N = 4
