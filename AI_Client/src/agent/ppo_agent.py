@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Categorical, Normal
 
-from AI_Client.src.agent.env_globals import *
+from AI_Client.src.agent.env_constants import *
 
 
 class PpoAgentCriticNn(nn.Module):

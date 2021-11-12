@@ -1,4 +1,4 @@
-from AI_Client.src.agent.env_globals import *
+from AI_Client.src.agent.env_constants import *
 
 
 class TrainingMemory:

@@ -1,9 +1,8 @@
-from Common.src.game_objects.entities.entity import Entity
-from Common.src.casting import SkillCooldowns
-import time
+from Common.src.game_world.entities.mobile_entity import MobileEntity
+from Common.src.game_world.entities.casting import SkillCooldowns
 
 
-class Player(Entity):
+class Player(MobileEntity):
     def __init__(self, player_id):
         self.player_id = player_id
         super(Player, self).__init__(radius=17, speed=100, max_health=100)

@@ -2,7 +2,7 @@ import numpy as np
 import Common.src.globals as g
 
 
-class Entity:
+class MobileEntity:
     def __init__(self, radius=15, speed=0, max_health=100):
         self.radius = radius
         self.max_health = max_health

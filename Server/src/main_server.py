@@ -2,19 +2,17 @@ import time
 import random
 import struct
 
-import numpy as np
-
 import Server.src.network.net_server as net
 from Common.src.network.message import MessageTypes
 from Common.src.network.message import Message
-from Common.src.game_objects.entities.player import Player
-from Common.src.game_objects.entities.mob import Mob
-from Common.src.game_objects.statics.obstacle import *
-from Common.src import casting
-from Common.src.casting import SkillTypes
-from Common.src.game_objects.collision.collision_eval import *
+from Common.src.game_world.entities.player import Player
+from Common.src.game_world.entities.mob import Mob
+from Common.src.game_world.entities.statics.obstacle import *
+from Common.src.game_world.entities import casting
+from Common.src.game_world.entities.casting import SkillTypes
+from Common.src.game_world.collision.collision_eval import *
 import Common.src.globals as g
-from Common.src.game_constants import *
+from Common.src.game_world.game_constants import *
 
 
 class ServerMain:

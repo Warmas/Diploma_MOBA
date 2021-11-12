@@ -1,14 +1,11 @@
-import time
-
 import torch
-import numpy as np
 import io
 
 from Client.src.main_client import ClientMain, MessageTypes, Message
-from Common.src.game_constants import *
+from Common.src.game_world.game_constants import *
 from AI_Client.src.agent.ppo_agent import PpoActorCritic
 from AI_Client.src.agent.ppo_trainer import PpoTrainer
-from AI_Client.src.agent.env_globals import *
+from AI_Client.src.agent.env_constants import *
 from AI_Client.src.agent.reward_constants import *
 from OpenGL.GLUT import *
 from PIL import Image
@@ -80,7 +77,8 @@ class AiClientMain(ClientMain):
                 self.enemy_player = player
         if self.is_first_player:
             self.is_optimizer = True
-        self.agent_trainer.is_game_over = False
+        if self.is_training:
+            self.agent_trainer.is_game_over = False
         self.time_alive = 0.0
         self.mobs_killed = 0
 
@@ -263,7 +261,8 @@ class AiClientMain(ClientMain):
 
     def end_game(self, loser_id=""):
         self.is_game_over = True
-        self.agent_trainer.is_game_over = True
+        if self.is_training:
+            self.agent_trainer.is_game_over = True
         self.agent_trainer.time_alive = self.time_alive
         self.agent_trainer.mobs_killed = self.mobs_killed
         if loser_id == self.user_player.player_id:

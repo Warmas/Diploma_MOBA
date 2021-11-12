@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.distributions import Categorical
 import torch.nn.functional as nn_func
 
-from AI_Client.src.agent.env_globals import *
+from AI_Client.src.agent.env_constants import *
 
 
 class AgentNn(nn.Module):

@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as nn_func
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-from AI_Client.src.agent.env_globals import *
+from AI_Client.src.agent.env_constants import *
 
 
 class TrainingMemory:

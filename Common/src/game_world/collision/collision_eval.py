@@ -1,6 +1,6 @@
 import math
 
-from Common.src.game_objects.collision.hit_detection import *
+from Common.src.game_world.collision.hit_detection import *
 
 
 def c_entity_c_static(entity, static):

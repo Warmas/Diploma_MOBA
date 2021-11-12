@@ -1,7 +1,7 @@
-from Common.src.game_objects.entities import entity
+from Common.src.game_world.entities import mobile_entity
 
 
-class Mob(entity.Entity):
+class Mob(mobile_entity.MobileEntity):
     def __init__(self, mob_id):
         self.mob_id = mob_id
         super(Mob, self).__init__(radius=12, speed=60, max_health=30)

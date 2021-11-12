@@ -4,11 +4,8 @@ import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from Client.src.render.render_constants import *
-import OpenGL.GL.shaders
-import glm
 
-from Client.src.render.shader import Shader
-from Common.src.casting import SkillTypes
+from Common.src.game_world.entities.casting import SkillTypes
 
 
 class KeyIds(Enum):
