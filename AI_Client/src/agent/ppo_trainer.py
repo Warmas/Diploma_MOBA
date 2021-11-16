@@ -19,7 +19,7 @@ class PpoTrainer:
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
         self.CRITIC_DISC_FACTOR = 0.5
-        self.DISC_ENTROPY_FACTOR = 1e-2  # ORIGINAL: 0.01, 1e-3 and lower causes 1-action choice->not enough at start
+        self.DISC_ENTROPY_FACTOR = 1e-3  # ORIGINAL: 0.01, 1e-3 and lower causes 1-action choice->not enough at start
         self.CONT_ENTROPY_FACTOR = 1e-4  # ORIGINAL: 5e-3
         self.GRAD_NORM = 0.5
 

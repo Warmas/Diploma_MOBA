@@ -27,9 +27,14 @@ Action = namedtuple("Action", ("disc_action", "mouse_x", "mouse_y"))
 
 
 if __name__ == '__main__':
-    mytuple = [1, 2, 3]
-    for tup in range(len(mytuple)):
-        mytuple[tup] = 1
-    print(mytuple)
+    # 250,200   123,98   60,47   28,22
+    kernel_size = 5
+    stride = 2
+    size = 60
+    res = (size - (kernel_size - 1) - 1) // stride + 1
+    print(res)
+    size = 47
+    res = (size - (kernel_size - 1) - 1) // stride + 1
+    print(res)
 
 

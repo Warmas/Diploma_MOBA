@@ -263,8 +263,9 @@ class AiClientMain(ClientMain):
         self.is_game_over = True
         if self.is_training:
             self.agent_trainer.is_game_over = True
-        self.agent_trainer.time_alive = self.time_alive
-        self.agent_trainer.mobs_killed = self.mobs_killed
+            self.agent_trainer.time_alive = self.time_alive
+            self.agent_trainer.mobs_killed = self.mobs_killed
+
         if loser_id == self.user_player.player_id:
             print("You lost!")
             if self.is_training:

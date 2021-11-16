@@ -20,7 +20,7 @@ class PpoAgentCriticNn(nn.Module):
         conv_w = conv2d_size_out(conv2d_size_out(conv2d_size_out(width)))
         conv_h = conv2d_size_out(conv2d_size_out(conv2d_size_out(height)))
         conv_out_size = conv_w * conv_h * 32
-        linear_in_size = conv_out_size  # This ws without cooldowns
+        linear_in_size = conv_out_size  # This is without cooldowns
         linear_in_size = conv_out_size + AGENT_NUM_INPUT_N
 
         self.conv_block = nn.Sequential(
@@ -49,13 +49,13 @@ class PpoAgentCriticNn(nn.Module):
 
         self.cont_means_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, cont_act_n),
-            #nn.ReLU6()
+            # nn.ReLU6()  # Causes undefined behaviour, probably due to true 0 in distributions
             nn.Tanh()  # this is the original but the these translate to pixel values so should be linear
         )
 
         self.cont_vars_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, cont_act_n),
-            #nn.ReLU()
+            # nn.ReLU()  # Causes undefined behaviour, probably due to true 0 in distributions
             nn.Softplus()  # original
         )
 
