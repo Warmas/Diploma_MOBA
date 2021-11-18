@@ -55,12 +55,14 @@ class AiClientMain(ClientMain):
                 print("Loaded optimizer from path: ", optimizer_path)
 
         self.steps_done = 0
-        self.agent_frame_time = 0
+        self.agent_frame_time = 0.0
         self.AGENT_FRAME_DELAY = 0.15  # Minimum FPS > 6.67
         self.cur_reward = 0
         # self.ai_time = 0
         self.time_alive = 0.0
         self.mobs_killed = 0
+        self.time_no_move_command = 0.0
+        self.TIME_NO_MOVE_COMMAND_THRESHOLD = 3.0
 
         # TESTING
         self.test_counter = 0
@@ -125,6 +127,7 @@ class AiClientMain(ClientMain):
     def player_moveto_callback(self, player_id):
         if player_id == self.user_player.player_id:
             self.cur_reward += MOVE_REWARD
+            self.time_no_move_command = 0.0
 
     def do_transfer(self):
         # msg = Message()
@@ -265,6 +268,7 @@ class AiClientMain(ClientMain):
             self.agent_trainer.is_game_over = True
             self.agent_trainer.time_alive = self.time_alive
             self.agent_trainer.mobs_killed = self.mobs_killed
+            self.time_no_move_command = 0.0
 
         if loser_id == self.user_player.player_id:
             print("You lost!")
@@ -301,6 +305,7 @@ class AiClientMain(ClientMain):
 
     def pre_world_update(self, delta_t):
         self.time_alive += delta_t
+        self.time_no_move_command += delta_t
         # # FOR TESTING SHAPES
         # self.test_counter += delta_t
         # if self.test_counter > 5:
@@ -328,15 +333,16 @@ class AiClientMain(ClientMain):
             image = np.transpose(image, (2, 0, 1))
             image_flatten = image.flatten()
 
-            cd_list = self.user_player.get_cooldowns()
-            for i in range(len(cd_list)):
-                if cd_list[i] > 0.0:
-                    cd_list[i] = 1.0
+            num_input_list = self.user_player.get_cooldowns()
+            for i in range(len(num_input_list)):
+                if num_input_list[i] > 0.0:
+                    num_input_list[i] = 1.0
+            num_input_list.append(self.time_no_move_command)
 
-            state = State(image_flatten, cd_list)
+            state = State(image_flatten, num_input_list)
 
             image_t = torch.from_numpy(np.asarray(image_flatten)).to(self.device)
-            cd_t = torch.tensor(cd_list).to(self.device)
+            cd_t = torch.tensor(num_input_list).to(self.device)
             action, act_prob = self.agent.select_action(image_t.unsqueeze(0), cd_t.unsqueeze(0))
             del image_t, cd_t
 
@@ -348,6 +354,10 @@ class AiClientMain(ClientMain):
             # if cur_frame - self.test_display_counter > 0.5:
             #     self.test_display_counter = cur_frame
             #     is_show_choice = True
+
+            if self.time_no_move_command - self.TIME_NO_MOVE_COMMAND_THRESHOLD > 0:
+                self.cur_reward += \
+                    (self.time_no_move_command - self.TIME_NO_MOVE_COMMAND_THRESHOLD) * NO_MOVE_COMMAND_REWARD
 
             if action.disc_action == 0:
                 self.cur_reward += DO_NOTHING_REWARD

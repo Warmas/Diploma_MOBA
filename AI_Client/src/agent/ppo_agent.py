@@ -20,7 +20,7 @@ class PpoAgentCriticNn(nn.Module):
         conv_w = conv2d_size_out(conv2d_size_out(conv2d_size_out(width)))
         conv_h = conv2d_size_out(conv2d_size_out(conv2d_size_out(height)))
         conv_out_size = conv_w * conv_h * 32
-        linear_in_size = conv_out_size  # This is without cooldowns
+        # linear_in_size = conv_out_size  # This is without numerical inputs
         linear_in_size = conv_out_size + AGENT_NUM_INPUT_N
 
         self.conv_block = nn.Sequential(
@@ -77,7 +77,7 @@ class PpoAgentCriticNn(nn.Module):
         nn.init.constant_(self.disc_act_block[0].bias, 0.0)
 
         nn.init.xavier_uniform_(self.cont_means_block[0].weight)
-        #nn.init.kaiming_uniform_(self.cont_means_block[0].weight, nonlinearity="relu")
+        # nn.init.kaiming_uniform_(self.cont_means_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_means_block[0].bias, 0.0)
 
         nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
@@ -96,10 +96,10 @@ class PpoAgentCriticNn(nn.Module):
         conv_out = self.conv_block(image_t)
         hidden_in = torch.cat((conv_out, cd_t), dim=1)
         hidden_out = self.hidden_block(hidden_in)
-        #hidden_out = self.hidden_block(conv_out)  # This is without cd input
+        # hidden_out = self.hidden_block(conv_out)  # This is without numerical inputs
         disc_out = self.disc_act_block(hidden_out)
         cont_means_out = ((self.cont_means_block(hidden_out) + 1) / 2)  # Change Tanh() range from [-1;1] to [0;1]
-        #cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
+        # cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
         cont_vars_out = self.cont_vars_block(hidden_out)
         critic_out = self.critic_block(hidden_out)
 

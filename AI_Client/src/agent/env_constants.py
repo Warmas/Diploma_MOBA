@@ -14,9 +14,9 @@ class Transition:
         self.act_prob = act_prob
 
 
-DISC_ACTION_N = 6
-CONT_ACTION_N = 2
+DISC_ACTION_N = 6  # Do nothing, Move, 4 skills
+CONT_ACTION_N = 2  # Mouse x, y
 AGENT_SCR_WIDTH = int(SCR_WIDTH / 4)
 AGENT_SCR_HEIGHT = int(SCR_HEIGHT / 4)
 
-AGENT_NUM_INPUT_N = 4
+AGENT_NUM_INPUT_N = 4 + 1  # 4 cooldowns + time without move command
