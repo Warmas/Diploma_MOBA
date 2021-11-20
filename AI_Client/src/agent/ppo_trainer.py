@@ -120,27 +120,27 @@ class PpoTrainer:
         cont_entropy_loss_list = []
 
         batch_image_list = []
-        batch_cd_list = []
+        batch_num_in_list = []
         batch_disc_act_list = []
         batch_reward_list = []
         batch_act_prob_list = []
         for batch_indexes in BatchSampler(SubsetRandomSampler(range(len(all_memory))), self.BATCH_SIZE, False):
             for index in batch_indexes:
                 batch_image_list.append(all_memory.state_list[index].image)
-                batch_cd_list.append(all_memory.state_list[index].cooldowns)
+                batch_num_in_list.append(all_memory.state_list[index].cooldowns)
                 batch_disc_act_list.append(all_memory.disc_act_list[index])
                 batch_reward_list.append(all_memory.reward_list[index])
                 batch_act_prob_list.append(all_memory.act_prob_list[index])
             # This process has many ways to be done and this one is possibly not the fastest but good enough.
             batch_images_t = torch.tensor(batch_image_list).to(self.device).detach()
-            batch_cd_t = torch.tensor(batch_cd_list).to(self.device).detach()
+            batch_num_in_t = torch.tensor(batch_num_in_list).to(self.device).detach()
             batch_disc_acts_t = torch.tensor(batch_disc_act_list, dtype=torch.int64).to(self.device).detach()
             batch_rewards_t = torch.tensor(batch_reward_list).to(self.device).detach()
             batch_act_probs_t = torch.tensor(batch_act_prob_list).to(self.device).detach()
 
             actor_loss, critic_loss, loss, disc_act_loss, cont_act_loss, disc_entropy_loss, cont_entropy_loss = \
                 self.optimization_step(batch_images_t,
-                                       batch_cd_t,
+                                       batch_num_in_t,
                                        batch_disc_acts_t,
                                        batch_rewards_t,
                                        batch_act_probs_t)
@@ -156,7 +156,7 @@ class PpoTrainer:
 
             # Clean up batch data
             batch_image_list.clear()
-            batch_cd_list.clear()
+            batch_num_in_list.clear()
             batch_disc_act_list.clear()
             batch_reward_list.clear()
             batch_act_prob_list.clear()
@@ -221,12 +221,12 @@ class PpoTrainer:
         return actor_loss_list, critic_loss_list, combined_loss_list, \
             disc_act_loss_list, cont_act_loss_list, disc_entropy_loss_list, cont_entropy_loss_list, reward_sum_list
 
-    def optimization_step(self, image_t, cd_t, disc_action, r_disc, old_act_prob):
-        disc_policy, cont_means, cont_vars, v_predicted = self.agent.brain(image_t, cd_t)
+    def optimization_step(self, image_t, num_in_t, disc_action, r_disc, old_act_prob):
+        disc_policy, cont_means, cont_vars, v_predicted = self.agent.brain(image_t, num_in_t)
         r_disc = r_disc.unsqueeze(1)
 
         actor_loss, disc_act_loss, cont_act_loss, disc_entropy_loss, cont_entropy_loss = \
-            self.calc_actor_loss(r_disc, v_predicted, image_t, cd_t, disc_action, old_act_prob)
+            self.calc_actor_loss(r_disc, v_predicted, image_t, num_in_t, disc_action, old_act_prob)
         critic_loss = self.calc_critic_loss(r_disc, v_predicted)
         loss = actor_loss + self.CRITIC_DISC_FACTOR * critic_loss
 

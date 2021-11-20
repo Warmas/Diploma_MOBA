@@ -63,6 +63,7 @@ class AiClientMain(ClientMain):
         self.mobs_killed = 0
         self.time_no_move_command = 0.0
         self.TIME_NO_MOVE_COMMAND_THRESHOLD = 3.0
+        self.TIME_NO_MOVE_COMMAND_MAX = 9.0
 
         # TESTING
         self.test_counter = 0
@@ -196,9 +197,9 @@ class AiClientMain(ClientMain):
         disc_act_prob = msg.get_float()
         mouse_x_prob = msg.get_float()
         mouse_y_prob = msg.get_float()
-        cd_list = []
+        num_in_list = []
         for i in range(AGENT_NUM_INPUT_N):
-            cd_list.append(msg.get_float())
+            num_in_list.append(msg.get_float())
 
         image_byte_size = msg.get_int()
         image_bytes = msg.get_bytes(image_byte_size)
@@ -212,7 +213,7 @@ class AiClientMain(ClientMain):
         # image = np.frombuffer(msg.get_bytes(image_byte_size), dtype=np.uint8)
 
         act_prob = ActionProb(disc_act_prob, mouse_x_prob, mouse_y_prob)
-        tran = Transition(State(image, cd_list), disc_act, reward, act_prob)
+        tran = Transition(State(image, num_in_list), disc_act, reward, act_prob)
         # If there were more agents each agent's message would include it's number but we only have one.
         self.agent_trainer.memory_list[1].push(tran)
         if tran_n % 20 == 0:
@@ -306,6 +307,7 @@ class AiClientMain(ClientMain):
     def pre_world_update(self, delta_t):
         self.time_alive += delta_t
         self.time_no_move_command += delta_t
+        self.time_no_move_command = max(self.time_no_move_command, self.TIME_NO_MOVE_COMMAND_MAX)
         # # FOR TESTING SHAPES
         # self.test_counter += delta_t
         # if self.test_counter > 5:
@@ -342,9 +344,9 @@ class AiClientMain(ClientMain):
             state = State(image_flatten, num_input_list)
 
             image_t = torch.from_numpy(np.asarray(image_flatten)).to(self.device)
-            cd_t = torch.tensor(num_input_list).to(self.device)
-            action, act_prob = self.agent.select_action(image_t.unsqueeze(0), cd_t.unsqueeze(0))
-            del image_t, cd_t
+            num_in_t = torch.tensor(num_input_list).to(self.device)
+            action, act_prob = self.agent.select_action(image_t.unsqueeze(0), num_in_t.unsqueeze(0))
+            del image_t, num_in_t
 
             mouse_x = action.mouse_x
             mouse_y = action.mouse_y
@@ -355,7 +357,7 @@ class AiClientMain(ClientMain):
             #     self.test_display_counter = cur_frame
             #     is_show_choice = True
 
-            if self.time_no_move_command - self.TIME_NO_MOVE_COMMAND_THRESHOLD > 0:
+            if self.time_no_move_command - self.TIME_NO_MOVE_COMMAND_THRESHOLD > 0.0:
                 self.cur_reward += \
                     (self.time_no_move_command - self.TIME_NO_MOVE_COMMAND_THRESHOLD) * NO_MOVE_COMMAND_REWARD
 
