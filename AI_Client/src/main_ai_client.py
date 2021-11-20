@@ -307,7 +307,7 @@ class AiClientMain(ClientMain):
     def pre_world_update(self, delta_t):
         self.time_alive += delta_t
         self.time_no_move_command += delta_t
-        self.time_no_move_command = max(self.time_no_move_command, self.TIME_NO_MOVE_COMMAND_MAX)
+        self.time_no_move_command = min(self.time_no_move_command, self.TIME_NO_MOVE_COMMAND_MAX)
         # # FOR TESTING SHAPES
         # self.test_counter += delta_t
         # if self.test_counter > 5:
