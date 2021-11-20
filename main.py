@@ -37,4 +37,8 @@ if __name__ == '__main__':
     res = (size - (kernel_size - 1) - 1) // stride + 1
     print(res)
 
+    cont_dist = Normal(0.0, 1)
+    cont_action = cont_dist.sample()
+    print(cont_action)
+
 

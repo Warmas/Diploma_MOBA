@@ -25,13 +25,13 @@ class PpoAgentCriticNn(nn.Module):
 
         self.conv_block = nn.Sequential(
             self.conv1,
-            #nn.BatchNorm2d(16),  #??? Batchnorm always decreases entropy to 0
+            # nn.BatchNorm2d(16),  #??? Batchnorm always decreases entropy to 0
             nn.ReLU(),
             self.conv2,
-            #nn.BatchNorm2d(32),
+            # nn.BatchNorm2d(32),
             nn.ReLU(),
             self.conv3,
-            #nn.BatchNorm2d(32), #instancenorm,layernorm,groupnorm
+            # nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten()
         )
@@ -55,8 +55,8 @@ class PpoAgentCriticNn(nn.Module):
 
         self.cont_vars_block = nn.Sequential(
             nn.Linear(self.hidden_out_size, cont_act_n),
-            # nn.ReLU()  # Causes undefined behaviour, probably due to true 0 in distributions
-            nn.Softplus()  # original
+            nn.ReLU()
+            # nn.Softplus()  # original
         )
 
         self.critic_block = nn.Sequential(
@@ -101,6 +101,8 @@ class PpoAgentCriticNn(nn.Module):
         cont_means_out = ((self.cont_means_block(hidden_out) + 1) / 2)  # Change Tanh() range from [-1;1] to [0;1]
         # cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
         cont_vars_out = self.cont_vars_block(hidden_out)
+        cont_vars_out = torch.clamp(cont_vars_out, min=0.000001)
+        # Necessary as true 0 causes issues with some versions of pytorch's distribution
         critic_out = self.critic_block(hidden_out)
 
         # A policy contains the "probabilities" for the actions.
@@ -116,7 +118,6 @@ class PpoAgentCriticNn(nn.Module):
 
 class PpoActorCritic:
     def __init__(self, device):
-        # If gpu is to be used
         self.device = device
         self.brain = PpoAgentCriticNn(AGENT_SCR_WIDTH, AGENT_SCR_HEIGHT,
                                       DISC_ACTION_N, CONT_ACTION_N).to(self.device)
@@ -163,9 +164,9 @@ class PpoActorCritic:
 
             cont_dist = Normal(cont_means, cont_vars)
             cont_action = cont_dist.sample()
-            cont_action = torch.clamp(cont_action, min=0, max=1)
+            cont_action = torch.clamp(cont_action, min=0.0, max=1.0)
             # cont_action = torch.clamp(cont_action, min=0.0001, max=1)
-            # Can't be 0 as it would be division by 0 later on! Doesn't need it with entropy though.
+            # Can't be 0 as it would be division by 0 later on! Doesn't need it with entropy approach though.
 
             # Transform continuous values to pixel values
             mouse_x_prob = cont_action[0][0].item()
