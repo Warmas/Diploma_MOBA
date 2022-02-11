@@ -19,7 +19,7 @@ class PpoTrainer:
         self.CLIP_PARAM = 0.2  # PPO clip parameter
         self.LR_AGENT = 1e-3
         self.CRITIC_DISC_FACTOR = 0.5
-        self.DISC_ENTROPY_FACTOR = 1e-3  # ORIGINAL: 0.01, 1e-3 and lower causes 1-action choice->not enough at start
+        self.DISC_ENTROPY_FACTOR = 1e-3  # ORIGINAL: 0.01, 1e-3 and lower causes staystill without punishment
         self.CONT_ENTROPY_FACTOR = 1e-4  # ORIGINAL: 5e-3
         self.GRAD_NORM = 0.5
 
@@ -41,6 +41,7 @@ class PpoTrainer:
         self.cur_episode_n = 1
         self.optimize_steps_done = 0
         self.is_logging = False
+        self.is_log_histograms = False  # Turned off unless required to check histograms
         self.writer = None
         if self.is_logging:
             self.writer = SummaryWriter()
@@ -172,42 +173,43 @@ class PpoTrainer:
             self.writer.add_scalar("Discrete entropy", disc_entropy_loss_list[-1], self.cur_episode_n)
             self.writer.add_scalar("Continuous entopy", cont_entropy_loss_list[-1], self.cur_episode_n)
 
-            self.writer.add_histogram(
-                "Conv1 weights", self.agent.brain.conv_block[0].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Conv1 bias", self.agent.brain.conv_block[0].bias, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Conv2 weights", self.agent.brain.conv_block[2].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Conv2 bias", self.agent.brain.conv_block[2].bias, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Conv3 weights", self.agent.brain.conv_block[4].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Conv3 bias", self.agent.brain.conv_block[4].bias, self.cur_episode_n)
+            if self.is_log_histograms:
+                self.writer.add_histogram(
+                    "Conv1 weights", self.agent.brain.conv_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv1 bias", self.agent.brain.conv_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv2 weights", self.agent.brain.conv_block[2].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv2 bias", self.agent.brain.conv_block[2].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv3 weights", self.agent.brain.conv_block[4].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Conv3 bias", self.agent.brain.conv_block[4].bias, self.cur_episode_n)
 
-            self.writer.add_histogram(
-                "Hidden weights", self.agent.brain.hidden_block[0].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Hidden bias", self.agent.brain.hidden_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Hidden weights", self.agent.brain.hidden_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Hidden bias", self.agent.brain.hidden_block[0].bias, self.cur_episode_n)
 
-            self.writer.add_histogram(
-                "Disc action weights", self.agent.brain.disc_act_block[0].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Disc action bias", self.agent.brain.disc_act_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Disc action weights", self.agent.brain.disc_act_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Disc action bias", self.agent.brain.disc_act_block[0].bias, self.cur_episode_n)
 
-            self.writer.add_histogram(
-                "Cont mean weights", self.agent.brain.cont_means_block[0].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Cont mean bias", self.agent.brain.cont_means_block[0].bias, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Cont var weights", self.agent.brain.cont_vars_block[0].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Cont var bias", self.agent.brain.cont_vars_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont mean weights", self.agent.brain.cont_means_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont mean bias", self.agent.brain.cont_means_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont var weights", self.agent.brain.cont_vars_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Cont var bias", self.agent.brain.cont_vars_block[0].bias, self.cur_episode_n)
 
-            self.writer.add_histogram(
-                "Critic weights", self.agent.brain.critic_block[0].weight, self.cur_episode_n)
-            self.writer.add_histogram(
-                "Critic bias", self.agent.brain.critic_block[0].bias, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Critic weights", self.agent.brain.critic_block[0].weight, self.cur_episode_n)
+                self.writer.add_histogram(
+                    "Critic bias", self.agent.brain.critic_block[0].bias, self.cur_episode_n)
 
             if self.is_game_over:
                 # Only log these when a game actually ends, don't do it when we run out of memory

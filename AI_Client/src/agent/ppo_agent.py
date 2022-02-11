@@ -13,7 +13,7 @@ class PpoAgentCriticNn(nn.Module):
         self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
-        self.hidden_out_size = 128
+        self.hidden_out_size = 128  # 512
 
         def conv2d_size_out(size, kernel_size=5, stride=2):
             return (size - (kernel_size - 1) - 1) // stride + 1
@@ -37,9 +37,12 @@ class PpoAgentCriticNn(nn.Module):
         )
 
         self.hidden_block = nn.Sequential(
+            # nn.LSTM(linear_in_size, self.hidden_out_size),
             nn.Linear(linear_in_size, self.hidden_out_size),
             nn.ReLU()
         )
+        self.hn = torch.zeros(1, linear_in_size)
+        self.cn = torch.zeros(1, linear_in_size)
 
         # Additional layers may be recommended to assure discrete-continuous action synchronization.
         self.disc_act_block = nn.Sequential(
@@ -72,6 +75,10 @@ class PpoAgentCriticNn(nn.Module):
 
         nn.init.kaiming_uniform_(self.hidden_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.hidden_block[0].bias, 0.0)
+        # nn.init.xavier_uniform_(self.hidden_block[0].weight_ih_l0)
+        # nn.init.xavier_uniform_(self.hidden_block[0].weight_hh_l0)
+        # nn.init.constant_(self.hidden_block[0].bias_ih_l0, 0.0)
+        # nn.init.constant_(self.hidden_block[0].bias_hh_l0, 0.0)
 
         nn.init.xavier_uniform_(self.disc_act_block[0].weight)
         nn.init.constant_(self.disc_act_block[0].bias, 0.0)
@@ -80,14 +87,15 @@ class PpoAgentCriticNn(nn.Module):
         # nn.init.kaiming_uniform_(self.cont_means_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_means_block[0].bias, 0.0)
 
-        nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
-        # nn.init.kaiming_uniform_(self.cont_vars_block[0].weight, nonlinearity="relu")
+        # nn.init.xavier_uniform_(self.cont_vars_block[0].weight)
+        nn.init.kaiming_uniform_(self.cont_vars_block[0].weight, nonlinearity="relu")
         nn.init.constant_(self.cont_vars_block[0].bias, 0.0)
 
         nn.init.xavier_uniform_(self.critic_block[0].weight)
         nn.init.constant_(self.critic_block[0].bias, 0.0)
 
     def forward(self, image_t, num_in_t):
+        # LSTM would require previous hn, cn
         """Requires image as a flattened image tensor."""
         batch_size = image_t.shape[0]
         image_t = image_t.reshape((batch_size, 3, AGENT_SCR_HEIGHT, AGENT_SCR_WIDTH))
@@ -95,8 +103,13 @@ class PpoAgentCriticNn(nn.Module):
 
         conv_out = self.conv_block(image_t)
         hidden_in = torch.cat((conv_out, num_in_t), dim=1)
+        # conv_out = conv_out.unsqueeze(0)  # Required for LSTM
+        # hidden_in = conv_out  # This is without numerical inputs
+        # hidden_out, (hn, cn) = self.hidden_block(hidden_in)
+        # self.hn = hn
+        # self.cn = cn
+        # hidden_out = hidden_out[-1, :, :]
         hidden_out = self.hidden_block(hidden_in)
-        # hidden_out = self.hidden_block(conv_out)  # This is without numerical inputs
         disc_out = self.disc_act_block(hidden_out)
         cont_means_out = ((self.cont_means_block(hidden_out) + 1) / 2)  # Change Tanh() range from [-1;1] to [0;1]
         # cont_means_out = self.cont_means_block(hidden_out) / 6  # Relu6 [0:6] to [0:1]
